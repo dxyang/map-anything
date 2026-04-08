@@ -19,7 +19,7 @@ dependencies = [
     "plyfile",
     "python-box",
     "requests",
-    "rerun-sdk~=0.24.1",
+    # "rerun-sdk~=0.24.1",
     "safetensors",
     "tensorboard",
     "tqdm",
