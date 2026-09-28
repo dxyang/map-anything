@@ -1124,7 +1124,7 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
                 label="Preview",
                 columns=4,
                 height="300px",
-                show_download_button=True,
+                # show_download_button=True,
                 object_fit="contain",
                 preview=True,
             )
@@ -1586,4 +1586,6 @@ with gr.Blocks(theme=theme, css=GRADIO_CSS) as demo:
     # -------------------------------------------------------------------------
     gr.HTML(get_acknowledgements_html())
 
-    demo.queue(max_size=20).launch(show_error=True, share=True, ssr_mode=False)
+    demo.queue(max_size=20).launch(
+        show_error=True, share=False, server_name="0.0.0.0", server_port=7860, ssr_mode=False
+    )

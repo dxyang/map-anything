@@ -13,13 +13,15 @@ dependencies = [
     "huggingface_hub",
     "hydra-core",
     "natsort",
-    "opencv-python-headless==4.10.0.84",
+    # loggerhead provides cv2 via opencv-contrib-python; two cv2-providing wheels
+    # cannot coexist in one environment, so track that distribution instead.
+    "opencv-contrib-python",
     "orjson",
     "pillow-heif",
     "plyfile",
     "python-box",
     "requests",
-    "rerun-sdk~=0.24.1",
+    "rerun-sdk>=0.24.1",
     "safetensors",
     "tensorboard",
     "tqdm",
@@ -35,7 +37,7 @@ colmap = [
     "open3d",
     "pycolmap==3.10.0"
 ]
-gradio = ["gradio==5.47.2", "spaces"]
+gradio = ["gradio", "spaces"]
 radio = ["timm"]
 # External models for benchmarking
 anycalib = ["anycalib @ git+https://github.com/javrtg/AnyCalib.git@main#egg=anycalib"]
@@ -44,7 +46,7 @@ dust3r = [
     "dust3r @ git+https://github.com/naver/dust3r.git@dust3r_setup#egg=dust3r",
 ]
 mast3r = ["mast3r @ git+https://github.com/Nik-V9/mast3r.git@main#egg=mast3r"]
-must3r = ["must3r @ git+https://github.com/naver/must3r.git@main#egg=must3r"]
+# must3r = ["must3r @ git+https://github.com/naver/must3r.git@main#egg=must3r"]
 pi3 = ["pi3 @ git+https://github.com/yyfz/Pi3.git@main#egg=pi3"]
 pow3r = ["pow3r @ git+https://github.com/Nik-V9/pow3r.git@main#egg=pow3r"]
 vggt-omega = ["vggt-omega @ git+https://github.com/facebookresearch/vggt-omega.git@main#egg=vggt-omega"]

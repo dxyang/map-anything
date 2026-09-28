@@ -137,6 +137,18 @@ def get_parser():
         default=False,
         help="Log only images for Rerun camera - no depth, mask, etc.",
     )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=1,
+        help="Load every Nth image from the folder",
+    )
+    parser.add_argument(
+        "--max_frames",
+        type=int,
+        default=None,
+        help="Cap the total number of frames processed (applied after stride)",
+    )
 
     return parser
 
@@ -164,7 +176,9 @@ def main():
 
     # Load images
     print(f"Loading images from: {args.image_folder}")
-    views = load_images(args.image_folder)
+    views = load_images(args.image_folder, stride=args.stride)
+    if args.max_frames is not None:
+        views = views[: args.max_frames]
     print(f"Loaded {len(views)} views")
 
     # Run model inference with memory-efficient defaults
