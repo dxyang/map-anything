@@ -1,0 +1,24 @@
+defaults:
+  - default
+
+# Deliberately tiny: one short revisit-dense dive, few views, so a correct rig can
+# drive the loss to near zero in minutes. If this cannot overfit, nothing
+# downstream is worth measuring.
+num_views: 8
+
+train:
+  variable_num_views: false
+
+resolution_train: ${dataset.resolution_options.518_1_33_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+divercam_wai:
+  train:
+    split: 'backforth_tag_only:train'
+    overfit_num_sets: 1
+  val:
+    split: 'backforth_tag_only:train'
+    overfit_num_sets: 1
+
+train_dataset: "+ 256 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 32 @ ${dataset.divercam_wai.val.dataset_str}"

@@ -2,6 +2,7 @@ defaults:
   - resolution_options: default
   - ase_wai: default
   - blendedmvs_wai: default
+  - divercam_wai: default
   - dl3dv_wai: default
   - dynamicreplica_wai: default
   - eth3d_wai: default

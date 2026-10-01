@@ -12,6 +12,7 @@ import torch
 from mapanything.datasets.wai.aerialmegadepth import AerialMegaDepthWAI  # noqa
 from mapanything.datasets.wai.ase import ASEWAI  # noqa
 from mapanything.datasets.wai.blendedmvs import BlendedMVSWAI  # noqa
+from mapanything.datasets.wai.divercam import DiverCamWAI  # noqa
 from mapanything.datasets.wai.dl3dv import DL3DVWAI  # noqa
 from mapanything.datasets.wai.dynamicreplica import DynamicReplicaWAI  # noqa
 from mapanything.datasets.wai.eth3d import ETH3DWAI  # noqa

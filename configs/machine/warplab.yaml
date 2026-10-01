@@ -1,0 +1,17 @@
+defaults:
+  - default
+
+# WHOI warplab. Data lives on the shared /srv/warplab mount, not local disk.
+# Root directory containing all datasets
+root_data_dir: "/srv/warplab/home/dxy"
+# Dataset metadata directory (unused by divercam: splits come from
+# loggerhead/configs/splits and per-scene metadata from scene_meta.json)
+mapanything_dataset_metadata_dir: "/srv/warplab/home/dxy/mapanything_dataset_metadata"
+# Root directory containing pretrained checkpoints for custom models
+root_pretrained_checkpoints_dir: "/srv/warplab/home/dxy/pretrained_checkpoints"
+# Root directory to log experiments
+root_experiments_dir: "/srv/warplab/home/dxy/loggerhead_experiments"
+# Root directory containing UniCeption pretrained checkpoints
+root_uniception_pretrained_checkpoints_dir: "/srv/warplab/home/dxy/pretrained_checkpoints/uniception"
+# Root directory containing external benchmark data
+external_benchmark_data_root_data_dir: "/srv/warplab/home/dxy/benchmark_data"

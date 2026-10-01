@@ -1,0 +1,28 @@
+dataset_str:
+  "DiverCamWAI(
+    split='${dataset.divercam_wai.val.split}',
+    resolution=${dataset.divercam_wai.val.dataset_resolution},
+    principal_point_centered=${dataset.divercam_wai.val.principal_point_centered},
+    seed=${dataset.divercam_wai.val.seed},
+    transform='${dataset.divercam_wai.val.transform}',
+    data_norm_type='${dataset.divercam_wai.val.data_norm_type}',
+    ROOT='${dataset.divercam_wai.val.ROOT}',
+    min_coverage=${dataset.divercam_wai.val.min_coverage},
+    overfit_num_sets=${dataset.divercam_wai.val.overfit_num_sets},
+    variable_num_views=${dataset.divercam_wai.val.variable_num_views},
+    num_views=${dataset.divercam_wai.val.num_views},
+    covisibility_thres=${dataset.divercam_wai.val.covisibility_thres})"
+# "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
+split: 'holdout_boobyrock_soundtrap:val'
+dataset_resolution: ${dataset.resolution_val_divercam}
+principal_point_centered: ${dataset.principal_point_centered}
+seed: 777
+transform: 'imgnorm'
+data_norm_type: ${model.data_norm_type}
+ROOT: ${root_data_dir}/divercam_wai
+# drop frames whose Metashape depth covers less than this fraction of pixels
+min_coverage: 0.3
+overfit_num_sets: null
+variable_num_views: ${dataset.val.variable_num_views}
+num_views: ${dataset.num_views}
+covisibility_thres: 0.25

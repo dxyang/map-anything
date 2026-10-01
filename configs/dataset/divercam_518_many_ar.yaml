@@ -1,0 +1,11 @@
+defaults:
+  - default
+
+# The real training set: three sites, boobyrock and soundtrap held out.
+num_views: 8
+
+resolution_train: ${dataset.resolution_options.518_many_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+train_dataset: "+ 20_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 1_000 @ ${dataset.divercam_wai.val.dataset_str}"
