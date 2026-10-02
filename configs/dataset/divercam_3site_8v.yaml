@@ -1,0 +1,18 @@
+defaults:
+  - default
+
+# The three-site training run: tektite + yawzi + joels (59,502 frames), with
+# boobyrock and soundtrap held out entirely as unseen sites. Validation is the
+# smallest segment of each training site, so it is in-domain for all three.
+#
+# 5_000 samples per epoch is chosen for check-in granularity rather than for any
+# statistical reason: on 3 GPUs at ~1.6 s/iteration that is ~45 min, so held-out
+# metrics can be read off a fresh checkpoint roughly hourly instead of after a
+# multi-hour epoch.
+num_views: 8
+
+resolution_train: ${dataset.resolution_options.518_many_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 500 @ ${dataset.divercam_wai.val.dataset_str}"
