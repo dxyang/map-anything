@@ -11,7 +11,12 @@ defaults:
 # multi-hour epoch.
 num_views: 8
 
-resolution_train: ${dataset.resolution_options.518_many_ar}
+# Landscape-only, and deliberately NOT 518_many_ar. Two reasons: 518_many_ar
+# includes (518,518), which pushed peak memory to 46,190 MiB -- 122 MB more than
+# an L40 has (46,068 MiB), so it OOM'd rank 2 on tharp one iteration in. And our
+# frames are 960x600, aspect 1.6, so square and portrait crops throw most of the
+# image away. Max here is (518,392), measured at ~40.6 GB.
+resolution_train: ${dataset.resolution_options.518_many_non_square_landscape_ar}
 resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
 
 train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
