@@ -77,6 +77,11 @@ class DiverCamWAI(BaseDataset):
         self.manifest = Path(manifest) if manifest else _default(
             "third_party/Pi3/datasets/divercam_manifest.yaml")
         self.min_coverage = min_coverage
+        # when set, _get_views uses these indices instead of sampling. Evaluation
+        # needs deployment-style consecutive windows as well as covisibility sets,
+        # and going through the normal path keeps BaseDataset's post-processing
+        # (transforms, pts3d, masks) identical between the two.
+        self.forced_view_indices = None
         self.overfit_num_sets = overfit_num_sets
         self._load_data()
 
@@ -131,9 +136,19 @@ class DiverCamWAI(BaseDataset):
         covis_name = next(f for f in os.listdir(covis_dir) if f.endswith(".npy"))
         covis = load_data(covis_dir / covis_name, "mmap")
         covis = _SplitMaskedCovisibility(covis, self.scene_allowed[scene_name])
-        view_indices = self._sample_view_indices(
-            num_views_to_sample, len(file_names), covis
+        view_indices = (
+            self.forced_view_indices
+            if self.forced_view_indices is not None
+            else self._sample_view_indices(num_views_to_sample, len(file_names), covis)
         )
+        return self._load_views(scene_name, view_indices, resolution)
+
+    def _load_views(self, scene_name, view_indices, resolution):
+        scene_root = self.ROOT / scene_name
+        scene_meta = load_data(scene_root / "scene_meta.json", "scene_meta")
+        depth_scale = scene_meta["divercam"]["depth_scale_to_metres"]
+        file_names = list(scene_meta["frame_names"].keys())
+        self.is_metric_scale = self.scene_metric[scene_name]
 
         views = []
         for view_index in view_indices:
