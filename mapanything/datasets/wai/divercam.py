@@ -55,6 +55,8 @@ class DiverCamWAI(BaseDataset):
         split_dir=None,
         manifest=None,
         min_coverage=0.3,
+        temporal_prob=0.0,
+        temporal_strides=(1, 3, 5, 10, 15),
         overfit_num_sets=None,
         **kwargs,
     ):
@@ -64,6 +66,12 @@ class DiverCamWAI(BaseDataset):
             split: name of a yaml in split_dir, or "train"/"val"/"test" within it.
             split_dir: directory of split specs (default: loggerhead/configs/splits).
             manifest: divercam_manifest.yaml (default: alongside the Pi3 datasets).
+            temporal_prob: probability of drawing a consecutive-frame window instead
+                          of a covisibility set. Covisibility sets span minutes with
+                          ~0.8 m baselines, so a model trained only on them has never
+                          seen what a deployed system sees, and measures worse at
+                          stride 1 than at stride 3. Mixing closes that gap.
+            temporal_strides: strides to draw from when sampling a temporal window.
             min_coverage: drop frames whose valid-depth fraction is below this.
                           Metashape MVS leaves 40-50% of pixels empty on the worst
                           frames, which carry too little supervision to be worth a
@@ -77,6 +85,8 @@ class DiverCamWAI(BaseDataset):
         self.manifest = Path(manifest) if manifest else _default(
             "third_party/Pi3/datasets/divercam_manifest.yaml")
         self.min_coverage = min_coverage
+        self.temporal_prob = temporal_prob
+        self.temporal_strides = list(temporal_strides)
         # when set, _get_views uses these indices instead of sampling. Evaluation
         # needs deployment-style consecutive windows as well as covisibility sets,
         # and going through the normal path keeps BaseDataset's post-processing
@@ -96,6 +106,7 @@ class DiverCamWAI(BaseDataset):
             raise ValueError(f"split {self.split_name} has no '{self.part}' part")
 
         self.scenes, self.scene_allowed, self.scene_metric = [], {}, {}
+        self.scene_segments = {}
         for member in spec[self.part]:
             label = member["survey"]
             scene_root = self.ROOT / label
@@ -110,6 +121,7 @@ class DiverCamWAI(BaseDataset):
                 continue
             self.scenes.append(label)
             self.scene_allowed[label] = allowed.astype(np.float32)
+            self.scene_segments[label] = segments
             # metric supervision needs the dive scaled AND the split to trust it
             self.scene_metric[label] = bool(
                 dives[label]["metric"] and member.get("metric_eval", True))
@@ -136,12 +148,41 @@ class DiverCamWAI(BaseDataset):
         covis_name = next(f for f in os.listdir(covis_dir) if f.endswith(".npy"))
         covis = load_data(covis_dir / covis_name, "mmap")
         covis = _SplitMaskedCovisibility(covis, self.scene_allowed[scene_name])
-        view_indices = (
-            self.forced_view_indices
-            if self.forced_view_indices is not None
-            else self._sample_view_indices(num_views_to_sample, len(file_names), covis)
-        )
+        if self.forced_view_indices is not None:
+            view_indices = self.forced_view_indices
+        elif self.temporal_prob > 0 and self._rng.random() < self.temporal_prob:
+            view_indices = self._sample_temporal_window(scene_name, num_views_to_sample)
+            if view_indices is None:  # no window fits; fall back
+                view_indices = self._sample_view_indices(
+                    num_views_to_sample, len(file_names), covis)
+        else:
+            view_indices = self._sample_view_indices(
+                num_views_to_sample, len(file_names), covis)
         return self._load_views(scene_name, view_indices, resolution)
+
+    def _sample_temporal_window(self, scene_name, num_views):
+        """A window of consecutive frames at a random stride, within one segment.
+
+        Segment-bounded on purpose: a window spanning a reconstruction
+        discontinuity contains one frame pair whose relative pose is wrong by
+        0.3-0.7 m, and training would take that as truth.
+        """
+        allowed = self.scene_allowed[scene_name] > 0
+        segments = self.scene_segments[scene_name]
+        for stride in self._rng.permutation(self.temporal_strides):
+            span = (num_views - 1) * int(stride)
+            if span >= len(allowed):
+                continue
+            starts = np.flatnonzero(
+                allowed[: len(allowed) - span]
+                & (segments[: len(segments) - span] == segments[span:])
+            )
+            # require every frame in the window to be in-split and in-segment
+            ok = [i for i in starts if allowed[i : i + span + 1 : int(stride)].all()]
+            if ok:
+                start = int(self._rng.choice(ok))
+                return list(range(start, start + span + 1, int(stride)))
+        return None
 
     def _load_views(self, scene_name, view_indices, resolution):
         scene_root = self.ROOT / scene_name

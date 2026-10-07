@@ -1,0 +1,22 @@
+defaults:
+  - default
+
+# Identical to divercam_3site_8v except that half the training samples are
+# consecutive-frame windows rather than covisibility sets. Everything else is
+# held fixed so the comparison isolates the sampling change.
+#
+# Why: covisibility sets span a median 358 s with ~0.8 m baselines, so a model
+# trained only on them has never seen what a deployed system sees. The stride
+# sweep showed the symptom -- stride 1 (33.4 mm) measures worse than stride 3
+# (27.1 mm), which should not happen if dense windows were in distribution.
+num_views: 8
+
+resolution_train: ${dataset.resolution_options.518_many_non_square_landscape_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+divercam_wai:
+  train:
+    temporal_prob: 0.5
+
+train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 500 @ ${dataset.divercam_wai.val.dataset_str}"

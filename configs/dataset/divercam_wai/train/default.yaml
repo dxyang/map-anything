@@ -8,6 +8,7 @@ dataset_str:
     data_norm_type='${dataset.divercam_wai.train.data_norm_type}',
     ROOT='${dataset.divercam_wai.train.ROOT}',
     min_coverage=${dataset.divercam_wai.train.min_coverage},
+    temporal_prob=${dataset.divercam_wai.train.temporal_prob},
     overfit_num_sets=${dataset.divercam_wai.train.overfit_num_sets},
     variable_num_views=${dataset.divercam_wai.train.variable_num_views},
     num_views=${dataset.divercam_wai.train.num_views},
@@ -20,6 +21,8 @@ aug_crop: 16
 transform: 'colorjitter+grayscale+gaublur'
 data_norm_type: ${model.data_norm_type}
 ROOT: ${root_data_dir}/divercam_wai
+# probability of a consecutive-frame window instead of a covisibility set
+temporal_prob: 0.0
 # drop frames whose Metashape depth covers less than this fraction of pixels
 min_coverage: 0.3
 overfit_num_sets: null
