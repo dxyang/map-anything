@@ -1,0 +1,18 @@
+defaults:
+  - default
+
+# WHOI hydra SLURM cluster. There is no /srv/warplab mount here, so everything
+# is a copy under /user/dayang pushed with rsync -- see docs/hydra-setup.md.
+# Root directory containing all datasets
+root_data_dir: "/user/dayang/data"
+# Dataset metadata directory (unused by divercam: splits come from
+# loggerhead/configs/splits and per-scene metadata from scene_meta.json)
+mapanything_dataset_metadata_dir: "/user/dayang/data/mapanything_dataset_metadata"
+# Root directory containing pretrained checkpoints for custom models
+root_pretrained_checkpoints_dir: "/user/dayang/data"
+# Root directory to log experiments
+root_experiments_dir: "/user/dayang/loggerhead_experiments"
+# Root directory containing UniCeption pretrained checkpoints
+root_uniception_pretrained_checkpoints_dir: "/user/dayang/data/uniception"
+# Root directory containing external benchmark data
+external_benchmark_data_root_data_dir: "/user/dayang/data/benchmark_data"

@@ -1,0 +1,32 @@
+defaults:
+  - default
+
+# Identical to divercam_3site_mix_8v except num_views: 24. The one variable.
+#
+# Why: the view-count ablation (scripts/ablate_num_views.py, 60 windows/site)
+# found both the pretrained model and our 8-view fine-tune peak at N=4-8 and
+# degrade ~3x by N=32, with near-identical normalised curves. Both were trained
+# with variable_num_views over 2..N_max -- pretraining 2..4, ours 2..8 -- so each
+# model's best N sits at or just above its own training maximum. Variable-N
+# training was already on and did not buy robustness past N_max.
+#
+# That leaves two explanations we cannot separate from eval alone: a capacity
+# limit in the alternating-attention stack, or an inherited training-distribution
+# limit. This run decides it. If the optimum moves toward 24, it is the training
+# distribution and long windows are reachable; if it stays at 8, the ceiling is
+# architectural and full-dive reconstruction has to come from windowed inference
+# plus stitching.
+num_views: 24
+
+# variable_num_views is true for train via configs/dataset/default.yaml, so this
+# samples 2..24 per batch. Peak memory is the N=24 batches: 8 views measured
+# 40.6 GB on an L40, which is why this runs on an H200 (141 GB) and not tharp.
+resolution_train: ${dataset.resolution_options.518_many_non_square_landscape_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+divercam_wai:
+  train:
+    temporal_prob: 0.5
+
+train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 500 @ ${dataset.divercam_wai.val.dataset_str}"
