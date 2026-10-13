@@ -702,6 +702,23 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
             torch.Tensor: A tensor containing the pose trans for all the views in the frame of the reference view 0. (batch_size_per_view * view, 3)
             torch.Tensor: A tensor containing the per sample camera input mask.
         """
+        # Prefer an explicit pose PRIOR when the dataset supplies one.
+        # camera_pose_quats/trans are also the pose head's supervision target
+        # (see train/losses.py gt_pose_quats_world), so a dataset conditioning on
+        # noisy sensor poses cannot just overwrite them -- that would retarget the
+        # loss too. prior_camera_pose_* keeps input and target separate; without
+        # it the behaviour is unchanged.
+        quats_key = (
+            "prior_camera_pose_quats"
+            if "prior_camera_pose_quats" in views[0]
+            else "camera_pose_quats"
+        )
+        trans_key = (
+            "prior_camera_pose_trans"
+            if "prior_camera_pose_trans" in views[0]
+            else "camera_pose_trans"
+        )
+
         # Compute the pose quats and trans for all the non-reference views in the frame of the reference view 0
         pose_quats_non_ref_views = []
         pose_trans_non_ref_views = []
@@ -712,25 +729,25 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
                 view_idx * batch_size_per_view : (view_idx + 1) * batch_size_per_view
             ]
             if (
-                "camera_pose_quats" in views[view_idx]
-                and "camera_pose_trans" in views[view_idx]
+                quats_key in views[view_idx]
+                and trans_key in views[view_idx]
                 and per_sample_cam_input_mask_for_curr_view.any()
             ):
                 # Get the camera pose quats and trans for the current view
-                cam_pose_quats = views[view_idx]["camera_pose_quats"][
+                cam_pose_quats = views[view_idx][quats_key][
                     per_sample_cam_input_mask_for_curr_view
                 ]
-                cam_pose_trans = views[view_idx]["camera_pose_trans"][
+                cam_pose_trans = views[view_idx][trans_key][
                     per_sample_cam_input_mask_for_curr_view
                 ]
                 # Append to the list
                 pose_quats_non_ref_views.append(cam_pose_quats)
                 pose_trans_non_ref_views.append(cam_pose_trans)
                 # Get the camera pose quats and trans for the reference view 0
-                cam_pose_quats = views[0]["camera_pose_quats"][
+                cam_pose_quats = views[0][quats_key][
                     per_sample_cam_input_mask_for_curr_view
                 ]
-                cam_pose_trans = views[0]["camera_pose_trans"][
+                cam_pose_trans = views[0][trans_key][
                     per_sample_cam_input_mask_for_curr_view
                 ]
                 # Append to the list

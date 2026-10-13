@@ -8,10 +8,12 @@ DiverCam underwater survey dataset using WAI format data.
 """
 
 import json
+import csv
 import os
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 import yaml
 
 from mapanything.datasets.base.base_dataset import BaseDataset
@@ -40,6 +42,52 @@ class _SplitMaskedCovisibility:
         return np.asarray(self._covis[row, col]) * self._allowed
 
 
+# Cam0 <- IMU/DVL (Nortek) extrinsic, Kalibr convention p_cam = T_CAM_IMU @ p_imu.
+# Downward camera (left), 2026-05-18-20-52-54 session, cam0. Copied from
+# loggerhead/scripts/tier0_fusion.py rather than imported: that lives outside this
+# submodule, and the numbers are calibration constants, not logic.
+T_CAM_IMU_DWN = np.array([
+    [-0.9995122254784973, 0.030794861284595153, -0.00519496270292499, -0.003938369353851938],
+    [-0.03076301546465094, -0.9995080768743684, -0.0061025521238302904, 0.18638744857761158],
+    [-0.005380334426769991, -0.005939762736419775, 0.9999678850943623, 0.008426479247768631],
+    [0.0, 0.0, 0.0, 1.0],
+])
+# Static TF base_link -> dvl_link from diver_zedxm_system.launch (yaw pi/2, roll pi).
+_T_BASE_DVL = np.eye(4)
+_T_BASE_DVL[:3, :3] = np.array([[0., 1., 0.], [1., 0., 0.], [0., 0., -1.]])
+# base_link <- camera. The EKF publishes the BODY pose, so a body pose must be
+# post-multiplied by this to become a camera pose. Skipping it leaves a constant
+# conjugation by the ~19 cm camera/IMU offset in the relative poses, which at the
+# rotations a diver makes is centimetres -- the size of the error being measured.
+T_BASE_CAM_DWN = _T_BASE_DVL @ np.linalg.inv(T_CAM_IMU_DWN)
+
+
+def _load_ekf_camera_poses(csv_path):
+    """frame name -> cam2world 4x4 from an EKF sync CSV, in the odom frame.
+
+    Returns absolute poses on purpose. MapAnything re-expresses pose priors
+    relative to view 0 inside the model, and a camera-to-camera relative pose is
+    independent of the world frame, so the EKF's drifting absolute XY cancels
+    within a window and no composition of rel_* is needed here.
+    """
+    out = {}
+    with open(csv_path) as f:
+        for row in csv.DictReader(f):
+            try:
+                t = np.array([float(row["x"]), float(row["y"]), float(row["z"])])
+                q = np.array([float(row["qx"]), float(row["qy"]),
+                              float(row["qz"]), float(row["qw"])])
+            except (ValueError, KeyError, TypeError):
+                continue  # frames outside the odometry time range are NaN
+            if not (np.isfinite(t).all() and np.isfinite(q).all()):
+                continue
+            T = np.eye(4)
+            T[:3, :3] = Rotation.from_quat(q).as_matrix()
+            T[:3, 3] = t
+            out[row["frame"]] = (T @ T_BASE_CAM_DWN).astype(np.float32)
+    return out
+
+
 class DiverCamWAI(BaseDataset):
     """
     Diver-operated ZED X Mini surveys of coral reef, 5 sites in the US Virgin
@@ -58,6 +106,9 @@ class DiverCamWAI(BaseDataset):
         temporal_prob=0.0,
         temporal_strides=(1, 3, 5, 10, 15),
         overfit_num_sets=None,
+        pose_prior="none",
+        pose_prior_noise_trans=0.0,
+        pose_prior_noise_rot=0.0,
         **kwargs,
     ):
         """
@@ -77,6 +128,21 @@ class DiverCamWAI(BaseDataset):
                           frames, which carry too little supervision to be worth a
                           view slot.
             overfit_num_sets: if set, truncate to this many sets.
+            pose_prior: what to feed the model's camera pose conditioning.
+                "none"      no prior; the vision-only baseline.
+                "ekf"       DVL+IMU poses from the dive's left_ekf_sync.csv,
+                            converted body->camera. This is the real signal.
+                "gt"        Metashape poses. LEAKAGE -- the pose head is
+                            supervised on these, so this is only an upper bound
+                            and a plumbing check, never a reportable result.
+                "gt+noise"  Metashape poses perturbed by the two noise args, to
+                            measure how much prior accuracy actually buys before
+                            depending on the EKF's real error characteristics.
+                BaseDataset fills camera_pose_quats/trans from the ground-truth
+                camera_pose, so MapAnything's own conditioning trains on perfect
+                priors. Anything other than "none" replaces them after the fact.
+            pose_prior_noise_trans: metres, per-axis Gaussian sigma on the prior.
+            pose_prior_noise_rot: degrees, Gaussian sigma on the prior rotation.
         """
         super().__init__(*args, **kwargs)
         self.ROOT = Path(ROOT)
@@ -93,6 +159,11 @@ class DiverCamWAI(BaseDataset):
         # (transforms, pts3d, masks) identical between the two.
         self.forced_view_indices = None
         self.overfit_num_sets = overfit_num_sets
+        assert pose_prior in ("none", "ekf", "gt", "gt+noise"), pose_prior
+        self.pose_prior = pose_prior
+        self.pose_prior_noise_trans = pose_prior_noise_trans
+        self.pose_prior_noise_rot = pose_prior_noise_rot
+        self._ekf_cache = {}
         self._load_data()
 
         # overwritten per scene in _get_views; this is the default for a mixed split
@@ -106,7 +177,7 @@ class DiverCamWAI(BaseDataset):
             raise ValueError(f"split {self.split_name} has no '{self.part}' part")
 
         self.scenes, self.scene_allowed, self.scene_metric = [], {}, {}
-        self.scene_segments = {}
+        self.scene_segments, self.scene_dive_root = {}, {}
         for member in spec[self.part]:
             label = member["survey"]
             scene_root = self.ROOT / label
@@ -125,11 +196,72 @@ class DiverCamWAI(BaseDataset):
             # metric supervision needs the dive scaled AND the split to trust it
             self.scene_metric[label] = bool(
                 dives[label]["metric"] and member.get("metric_eval", True))
+            # the dive's down/ directory, which is where left_ekf_sync.csv lives
+            self.scene_dive_root[label] = Path(dives[label]["root"])
 
         self.num_of_scenes = len(self.scenes)
         if self.overfit_num_sets is not None:
             self.scenes = self.scenes[: self.overfit_num_sets]
             self.num_of_scenes = len(self.scenes)
+
+    def _ekf_poses(self, scene_name):
+        """Cached frame -> cam2world from the dive's EKF sync CSV ({} if absent)."""
+        if scene_name not in self._ekf_cache:
+            csv_path = self.scene_dive_root[scene_name] / "left_ekf_sync.csv"
+            self._ekf_cache[scene_name] = (
+                _load_ekf_camera_poses(csv_path) if csv_path.is_file() else {})
+        return self._ekf_cache[scene_name]
+
+    def _getitem_fn(self, idx):
+        """BaseDataset's item, plus the pose prior the model conditions on.
+
+        Done here rather than in _get_views because BaseDataset fills
+        camera_pose_quats/trans from the ground-truth pose AFTER _get_views
+        returns, so anything set earlier would be overwritten.
+        """
+        views = super()._getitem_fn(idx)
+        if self.pose_prior == "none":
+            return views
+
+        scene_name = views[0]["label"]
+        priors = []
+        for v in views:
+            if self.pose_prior == "ekf":
+                frame = Path(v["instance"]).stem
+                T = self._ekf_poses(scene_name).get(frame)
+            else:
+                T = np.asarray(v["camera_pose"], dtype=np.float32)
+                if self.pose_prior == "gt+noise":
+                    T = self._perturb(T)
+            priors.append(T)
+
+        # All or nothing per view set: the model reads view 0's prior as the
+        # reference for every other view, so a set missing any one of them cannot
+        # be partially conditioned. Dropping the prior degrades the sample to
+        # vision-only, which is a valid sample; EKF coverage is 99.6%+ so this is
+        # rare. Falling back to the GT pose instead would silently leak.
+        if any(T is None for T in priors):
+            return views
+
+        for v, T in zip(views, priors):
+            v["prior_camera_pose_quats"] = (
+                Rotation.from_matrix(T[:3, :3]).as_quat().astype(np.float32))
+            v["prior_camera_pose_trans"] = np.ascontiguousarray(
+                T[:3, 3], dtype=np.float32)
+        return views
+
+    def _perturb(self, T):
+        """Gaussian noise on a pose: metres on translation, degrees on rotation."""
+        out = np.array(T, dtype=np.float32)
+        if self.pose_prior_noise_trans > 0:
+            out[:3, 3] += self._rng.normal(
+                0.0, self.pose_prior_noise_trans, 3).astype(np.float32)
+        if self.pose_prior_noise_rot > 0:
+            axis = self._rng.normal(size=3)
+            axis /= np.linalg.norm(axis) + 1e-12
+            angle = np.deg2rad(self._rng.normal(0.0, self.pose_prior_noise_rot))
+            out[:3, :3] = Rotation.from_rotvec(axis * angle).as_matrix() @ out[:3, :3]
+        return out
 
     def _get_views(self, sampled_idx, num_views_to_sample, resolution):
         scene_name = self.scenes[sampled_idx]
