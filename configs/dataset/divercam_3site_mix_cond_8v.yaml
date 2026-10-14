@@ -1,0 +1,28 @@
+defaults:
+  - default
+
+# divercam_3site_mix_8v plus EKF pose conditioning. Everything else is held fixed
+# so the comparison against that run isolates the conditioning.
+#
+# Why now: as of 2026-10-14 all six surveys have proprioception synced, so all
+# three training sites carry real EKF poses and both held-out sites can be
+# evaluated with them. Before that only yawzi_lawnmower had nav data.
+#
+# No synthetic noise. The earlier plan to augment with injected noise existed to
+# cover surveys lacking nav data and to calibrate trust; the first reason is gone,
+# and the model can learn the sensor's real noise properties better than we can
+# invent them. Synthetic noise is now a separate robustness ablation.
+num_views: 8
+
+resolution_train: ${dataset.resolution_options.518_many_non_square_landscape_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+divercam_wai:
+  train:
+    temporal_prob: 0.5
+    pose_prior: 'ekf'
+  val:
+    pose_prior: 'ekf'
+
+train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 500 @ ${dataset.divercam_wai.val.dataset_str}"

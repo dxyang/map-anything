@@ -1,0 +1,33 @@
+defaults:
+  - default
+
+# Pose conditioning ONLY. aug_training would be the obvious choice but it also
+# turns on ray_dirs_prob, depth_prob and sparse_depth_prob at 0.5 each -- and
+# depth conditioning reads `depth_along_ray`, which IS our supervision target, so
+# it would leak Metashape straight into the input. Ray directions are redundant
+# (intrinsics are fixed and known). So only the camera pose channel is opened.
+
+# Fraction of samples that get any geometric input at all. 0.5 rather than ~1 so
+# the model keeps a vision-only mode: the same checkpoint then serves both the
+# conditioned and unconditioned arms, and inference degrades gracefully when the
+# DVL drops out.
+overall_prob: 0.5
+# Per-view dropout within a conditioned sample. Small but non-zero: real windows
+# occasionally miss a frame's EKF pose (frames outside the odometry time range).
+dropout_prob: 0.1
+# Camera pose (rotation AND translation together -- cam_prob gates both).
+# Both on deliberately: the measured picture is that EKF rotation beats the
+# fine-tuned model everywhere (2x) while its translation loses everywhere
+# (1.2-1.6x) but carries metric scale. Withholding translation would discard the
+# scale signal, and the model has separate cam_rot / cam_trans encoders, so it can
+# learn per-channel reliability itself.
+cam_prob: 1.0
+# Off: redundant given fixed known intrinsics.
+ray_dirs_prob: 0
+# Off: `depth_along_ray` is the supervision target. Conditioning on it is leakage.
+depth_prob: 0
+sparse_depth_prob: 0
+sparsification_removal_percent: 0
+# Keep the prior's metric magnitude -- that is the scale signal we want learned.
+depth_scale_norm_all_prob: 0
+pose_scale_norm_all_prob: 0
