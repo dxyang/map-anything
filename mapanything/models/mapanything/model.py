@@ -1264,22 +1264,34 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
         )
 
         # Encode the ray directions and fuse with the image encoder features
-        all_encoder_features_across_views = self._encode_and_fuse_ray_dirs(
-            views,
-            num_views,
-            batch_size_per_view,
-            all_encoder_features_across_views,
-            per_sample_ray_dirs_input_mask,
-        )
+        # Skipped entirely when nothing is conditioned on ray directions. Fusion is an
+        # addition of mask-zeroed features, so an all-False mask contributes
+        # exactly zero -- but the encoder is a DENSE per-pixel one, so running it
+        # anyway costs its full activations for no effect. That was enough to OOM
+        # an L40 on a pose-only conditioning run that fits comfortably without it.
+        if per_sample_ray_dirs_input_mask.any():
+            all_encoder_features_across_views = self._encode_and_fuse_ray_dirs(
+                views,
+                num_views,
+                batch_size_per_view,
+                all_encoder_features_across_views,
+                per_sample_ray_dirs_input_mask,
+            )
 
         # Encode the depths and fuse with the image encoder features
-        all_encoder_features_across_views = self._encode_and_fuse_depths(
-            views,
-            num_views,
-            batch_size_per_view,
-            all_encoder_features_across_views,
-            per_sample_depth_input_mask,
-        )
+        # Skipped entirely when nothing is conditioned on depth. Fusion is an
+        # addition of mask-zeroed features, so an all-False mask contributes
+        # exactly zero -- but the encoder is a DENSE per-pixel one, so running it
+        # anyway costs its full activations for no effect. That was enough to OOM
+        # an L40 on a pose-only conditioning run that fits comfortably without it.
+        if per_sample_depth_input_mask.any():
+            all_encoder_features_across_views = self._encode_and_fuse_depths(
+                views,
+                num_views,
+                batch_size_per_view,
+                all_encoder_features_across_views,
+                per_sample_depth_input_mask,
+            )
 
         # Encode the cam quat and trans and fuse with the image encoder features
         all_encoder_features_across_views = self._encode_and_fuse_cam_quats_and_trans(
