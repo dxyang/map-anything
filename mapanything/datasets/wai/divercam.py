@@ -188,6 +188,20 @@ class DiverCamWAI(BaseDataset):
             keep = set(member.get("segments", range(segments.max() + 1)))
             keep -= set(member.get("exclude_segments", []))
             allowed = np.isin(segments, list(keep)) & (coverage >= self.min_coverage)
+            # the dive's down/ directory, which is where left_ekf_sync.csv lives
+            self.scene_dive_root[label] = Path(dives[label]["root"])
+            if self.pose_prior == "ekf":
+                # Exclude frames whose EKF pose is NaN -- the handful at each end
+                # of a dive, outside the odometry time range -- from sampling.
+                # A view set missing the prior for even one view has to drop it
+                # for all of them (the model reads view 0 as the reference), and
+                # a BATCH that mixes sets with and without prior_camera_pose_*
+                # dies in default_collate, which is not something the dataset can
+                # see. That killed a 12-epoch run in epoch 11. Costs ~9 frames of
+                # 64k, so excluding them is cheaper than handling them.
+                ekf = self._ekf_poses(label)
+                allowed &= np.array(
+                    [f["frame_name"] in ekf for f in meta["frames"]])
             if not allowed.any():
                 continue
             self.scenes.append(label)
@@ -196,8 +210,6 @@ class DiverCamWAI(BaseDataset):
             # metric supervision needs the dive scaled AND the split to trust it
             self.scene_metric[label] = bool(
                 dives[label]["metric"] and member.get("metric_eval", True))
-            # the dive's down/ directory, which is where left_ekf_sync.csv lives
-            self.scene_dive_root[label] = Path(dives[label]["root"])
 
         self.num_of_scenes = len(self.scenes)
         if self.overfit_num_sets is not None:
@@ -237,9 +249,13 @@ class DiverCamWAI(BaseDataset):
 
         # All or nothing per view set: the model reads view 0's prior as the
         # reference for every other view, so a set missing any one of them cannot
-        # be partially conditioned. Dropping the prior degrades the sample to
-        # vision-only, which is a valid sample; EKF coverage is 99.6%+ so this is
-        # rare. Falling back to the GT pose instead would silently leak.
+        # be partially conditioned. Falling back to the GT pose would leak.
+        #
+        # With pose_prior='ekf', _load_data already excludes frames that have no
+        # EKF pose, so this is unreachable from the sampling path. It remains a
+        # backstop for forced_view_indices, which bypasses the allowed mask --
+        # callers doing that must use batch size 1, because a batch mixing sets
+        # with and without these keys fails in default_collate.
         if any(T is None for T in priors):
             return views
 
