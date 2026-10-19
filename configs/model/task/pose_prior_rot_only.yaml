@@ -1,0 +1,16 @@
+defaults:
+  - pose_prior_only
+
+# Rotation channel only: the quaternion reaches the model, the translation and
+# its scale scalar are withheld. Half of the channel ablation that
+# pose_prior_only cannot express, because cam_prob gates all three together.
+#
+# Expected to be the weaker arm. The EKF's rotation already beats the model's
+# everywhere (~2x: at separation 30, 1.615 deg against 3.465), so rotation is the
+# channel with the most to give -- but translation is the one carrying metric
+# scale, and the conditioning gain showed up precisely where visual overlap
+# collapses and scale drifts. If rotation alone recovers the gain, the prior is
+# doing attitude stabilisation; if it does not, the gain is metric.
+cam_rot_prob: 1.0
+cam_trans_prob: 0.0
+cam_trans_scale_prob: 0.0

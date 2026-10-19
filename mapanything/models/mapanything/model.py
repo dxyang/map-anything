@@ -677,6 +677,24 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
 
         return all_encoder_features_across_views, all_encoder_registers_across_views
 
+    def _cam_channel_mask(self, name, master, batch_size_per_view, num_views):
+        """Sub-gate of the camera input mask for one conditioning channel.
+
+        `cam_prob` gates rotation, translation and the translation-scale scalar
+        together, so "which of the three earns the conditioning gain?" cannot be
+        asked of a trained model. Each channel gets its own probability, default
+        1.0, so behaviour is exactly `cam_prob` unless a config says otherwise.
+        """
+        p = self.geometric_input_config.get(name, 1.0)
+        if p >= 1.0:
+            return master
+        if p <= 0.0:
+            return torch.zeros_like(master)
+        sub = (torch.rand(batch_size_per_view, device=master.device) < p).repeat(
+            num_views
+        )
+        return master & sub
+
     def _compute_pose_quats_and_trans_for_across_views_in_ref_view(
         self,
         views,
@@ -1089,8 +1107,11 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
             EncoderGlobalRepInput(data=pose_quats_across_views)
         ).features
         # Zero out the pose quat features where the camera input mask is False
+        rot_mask = self._cam_channel_mask(
+            "cam_rot_prob", per_sample_cam_input_mask, batch_size_per_view, num_views
+        )
         pose_quats_features_across_views = (
-            pose_quats_features_across_views * per_sample_cam_input_mask.unsqueeze(-1)
+            pose_quats_features_across_views * rot_mask.unsqueeze(-1)
         )
 
         # Get the metric scale mask for all samples
@@ -1147,8 +1168,11 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
             EncoderGlobalRepInput(data=scaled_pose_trans_across_views)
         ).features
         # Zero out the pose trans features where the camera input mask is False
+        trans_mask = self._cam_channel_mask(
+            "cam_trans_prob", per_sample_cam_input_mask, batch_size_per_view, num_views
+        )
         pose_trans_features_across_views = (
-            pose_trans_features_across_views * per_sample_cam_input_mask.unsqueeze(-1)
+            pose_trans_features_across_views * trans_mask.unsqueeze(-1)
         )
 
         # Encode the pose translation norm factors using the log scale encoder for pose trans
@@ -1158,10 +1182,15 @@ class MapAnything(nn.Module, PyTorchModelHubMixin):
         pose_trans_scale_features_across_views = self.cam_trans_scale_encoder(
             EncoderGlobalRepInput(data=log_pose_trans_norm_factors_across_views)
         ).features
-        # Zero out the pose trans scale features where the camera input mask is False
+        # Zero out the pose trans scale features where the camera input mask is
+        # False. Gated by the translation mask, not the master one: this scalar is
+        # the norm of the translation vector, so leaking it while withholding the
+        # translation would not be a translation-free ablation.
+        scale_mask = self._cam_channel_mask(
+            "cam_trans_scale_prob", trans_mask, batch_size_per_view, num_views
+        )
         pose_trans_scale_features_across_views = (
-            pose_trans_scale_features_across_views
-            * per_sample_cam_input_mask.unsqueeze(-1)
+            pose_trans_scale_features_across_views * scale_mask.unsqueeze(-1)
         )
         # Zero out the pose trans scale features where the metric scale mask is False
         # Scale encoding is only provided for metric scale samples

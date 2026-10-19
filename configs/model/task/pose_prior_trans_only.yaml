@@ -1,0 +1,9 @@
+defaults:
+  - pose_prior_only
+
+# Translation channel only (with its scale scalar, which is the norm of that same
+# translation and cannot be withheld separately without making the arm incoherent).
+# The other half of the channel ablation; see pose_prior_rot_only.yaml.
+cam_rot_prob: 0.0
+cam_trans_prob: 1.0
+cam_trans_scale_prob: 1.0
