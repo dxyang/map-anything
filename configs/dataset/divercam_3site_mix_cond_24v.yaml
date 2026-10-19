@@ -1,0 +1,28 @@
+defaults:
+  - default
+
+# divercam_3site_mix_24v plus EKF pose conditioning: the 24-view arm of the same
+# paired comparison divercam_3site_mix_cond_8v makes at 8 views. Everything else
+# is held fixed against the 24v run so the only variable is the prior.
+#
+# Why both arms at 24 views matter: at 8 views the prior bought operating
+# envelope rather than per-window accuracy (stride 3 a tie, stride 22 266 -> 109
+# mm), i.e. it pays exactly where visual overlap collapses. A 24-view window
+# covers more ground for the same stride, so it lives further into that regime by
+# construction -- but the 24-view vision-only model also turned out to trade
+# point error for rotation and scale, which the prior also supplies. Whether the
+# two are redundant or additive is not predictable from either run alone.
+num_views: 24
+
+resolution_train: ${dataset.resolution_options.518_many_non_square_landscape_ar}
+resolution_val_divercam: ${dataset.resolution_options.518_1_33_ar}
+
+divercam_wai:
+  train:
+    temporal_prob: 0.5
+    pose_prior: 'ekf'
+  val:
+    pose_prior: 'ekf'
+
+train_dataset: "+ 5_000 @ ${dataset.divercam_wai.train.dataset_str}"
+test_dataset: "+ 500 @ ${dataset.divercam_wai.val.dataset_str}"
