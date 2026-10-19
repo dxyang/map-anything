@@ -31,6 +31,9 @@ class _SplitMaskedCovisibility:
 
     def __init__(self, covis, allowed):
         self._covis, self._allowed = covis, allowed
+        # The sampler draws its start node by index, not through __getitem__, so
+        # zeroing alone cannot keep an out-of-split view out of walk[0].
+        self.allowed_nodes = np.flatnonzero(allowed)
 
     def __len__(self):
         return len(self._covis)
@@ -265,6 +268,17 @@ class DiverCamWAI(BaseDataset):
         # callers doing that must use batch size 1, because a batch mixing sets
         # with and without these keys fails in default_collate.
         if any(T is None for T in priors):
+            if self.forced_view_indices is None:
+                # Sampled sets must never reach here: _load_data excludes
+                # frames without an EKF pose. If one does, the set goes into the
+                # batch without prior_camera_pose_* and default_collate dies far
+                # from the cause -- which cost a 12-epoch run and a 21-epoch one.
+                missing = [Path(v["instance"]).stem
+                           for v, T in zip(views, priors) if T is None]
+                raise RuntimeError(
+                    f"{scene_name}: sampled views have no {self.pose_prior} pose "
+                    f"prior: {missing}. The split mask should have excluded them."
+                )
             return views
 
         for v, T in zip(views, priors):

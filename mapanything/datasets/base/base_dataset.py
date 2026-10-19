@@ -346,9 +346,17 @@ class BaseDataset(EasyDataset):
             walk = []  # List to store the random walk sampling order
             stack = []  # Stack for backtracking
 
-            # Choose a random starting index that is not in the excluded set
-            all_nodes = set(range(len(scene_pairwise_covisibility)))
-            available_nodes = list(all_nodes - excluded_nodes)
+            # Choose a random starting index that is not in the excluded set.
+            # A covisibility view may admit only a subset of the scene's views (a
+            # split mask); the walk's neighbours are filtered by the view itself,
+            # but the START node is drawn here, so it has to be filtered here too
+            # or every walk can begin on a view the mask meant to withhold.
+            all_nodes = getattr(
+                scene_pairwise_covisibility,
+                "allowed_nodes",
+                range(len(scene_pairwise_covisibility)),
+            )
+            available_nodes = list(set(all_nodes) - excluded_nodes)
             if not available_nodes:
                 break  # No more nodes to try
             start = self._rng.choice(available_nodes)
