@@ -219,9 +219,17 @@ class DiverCamWAI(BaseDataset):
     def _ekf_poses(self, scene_name):
         """Cached frame -> cam2world from the dive's EKF sync CSV ({} if absent)."""
         if scene_name not in self._ekf_cache:
-            csv_path = self.scene_dive_root[scene_name] / "left_ekf_sync.csv"
-            self._ekf_cache[scene_name] = (
-                _load_ekf_camera_poses(csv_path) if csv_path.is_file() else {})
+            # The dive tree holds the authoritative copy, but it is a separate
+            # tree from the WAI one and hydra has no /srv/warplab mount -- only
+            # the WAI scenes get rsynced there. So fall back to a copy inside the
+            # scene directory, which keeps the WAI tree self-contained.
+            for csv_path in (self.scene_dive_root[scene_name] / "left_ekf_sync.csv",
+                             Path(self.ROOT) / scene_name / "left_ekf_sync.csv"):
+                if csv_path.is_file():
+                    self._ekf_cache[scene_name] = _load_ekf_camera_poses(csv_path)
+                    break
+            else:
+                self._ekf_cache[scene_name] = {}
         return self._ekf_cache[scene_name]
 
     def _getitem_fn(self, idx):
