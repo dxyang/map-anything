@@ -1,0 +1,33 @@
+defaults:
+  - divercam_3site_mix_cond_8v
+
+# The matched control for divercam_3site_mix_8v_fwd2: SIX downward views and no
+# forward ones, so the two configs differ only by the two forward views.
+#
+# Why this exists. The forward run is 8 views of which 2 are forward, i.e. 6
+# downward views. Comparing it against the 8-downward run confounds two things at
+# once -- adding forward views, and removing two downward views -- and a negative
+# result would be unattributable. Against this config the downward half is held
+# identical, so any difference is the forward views alone. The separate question of
+# what dropping two downward views costs is answered by this config against the
+# existing 8-downward run, which is already trained.
+#
+# Not "8 down + 2 forward", which would be the cleaner design, because it does not
+# fit: 8 views with gradient checkpointing already peaks at 40.6 GB on a 46 GB L40,
+# and 10 views needs roughly 51 GB. The H200s would hold it but hydra has no warplab
+# mount, so it would need the whole forward tree copied across first.
+#
+# Reads the same tree and the same v1 covisibility tables as the forward run. The
+# same-camera cells there are bit-identical to v0, so downward sampling is unchanged
+# from every earlier divercam run.
+num_views: 6
+
+divercam_wai:
+  train:
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    num_forward_views: 0
+    covis_version: 'v1'
+  val:
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    num_forward_views: 0
+    covis_version: 'v1'

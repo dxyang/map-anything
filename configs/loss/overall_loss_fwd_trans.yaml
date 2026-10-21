@@ -1,0 +1,18 @@
+# overall_loss, but translation is supervised on EVERY view instead of only the
+# views that have valid GT depth.
+#
+# Upstream gates pose_trans on the depth validity mask, treating "no depth" as a
+# proxy for "this view's pose GT cannot be trusted" -- correct when depth and pose
+# both come from one reconstruction. DiverCam's forward views break that coupling:
+# they have no depth at all, but their pose is the rig calibration, exact to ~1e-6 m
+# and independent of any depth. Under the default gate the forward camera's
+# translation -- which we know perfectly and for free -- is simply discarded, and
+# only its orientation is supervised.
+#
+# Nothing changes for downward views: min_coverage keeps their depth mask non-empty,
+# so their gate already passed. Use with any divercam config that sets
+# num_forward_views > 0.
+# Training Loss
+train_criterion: "ConfAndExcludeTopNPercentPixelLoss(FactoredGeometryScaleRegr3DPlusNormalGMLoss(RobustRegressionLoss(alpha=0.5, scaling_c=0.05), norm_mode='avg_dis', depth_type_for_loss='depth_along_ray', loss_in_log=True, flatten_across_image_only=True, compute_pairwise_relative_pose_loss=False, gate_pose_trans_on_depth=False, compute_world_frame_points_loss=True, apply_normal_and_gm_loss_to_synthetic_data_only=True, normal_loss_weight=3.0, gm_loss_weight=3.0), conf_alpha=0.2, top_n_percent=5, apply_to_real_data_only=True, conf_loss_set_indices=[0], exclude_loss_set_indices=[1, 2]) + 0.3 * NonAmbiguousMaskLoss(BCELoss())"
+# Validation Loss
+test_criterion: "ExcludeTopNPercentPixelLoss(FactoredGeometryScaleRegr3DPlusNormalGMLoss(RobustRegressionLoss(alpha=0.5, scaling_c=0.05), norm_mode='avg_dis', depth_type_for_loss='depth_along_ray', loss_in_log=True, flatten_across_image_only=True, compute_pairwise_relative_pose_loss=False, gate_pose_trans_on_depth=False, compute_world_frame_points_loss=True, apply_normal_and_gm_loss_to_synthetic_data_only=True, normal_loss_weight=3.0, gm_loss_weight=3.0), top_n_percent=5, apply_to_real_data_only=True, loss_set_indices=[0, 1, 2]) + 0.3 * NonAmbiguousMaskLoss(BCELoss())"

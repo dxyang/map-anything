@@ -13,7 +13,11 @@ dataset_str:
     variable_num_views=${dataset.divercam_wai.train.variable_num_views},
     num_views=${dataset.divercam_wai.train.num_views},
     covisibility_thres=${dataset.divercam_wai.train.covisibility_thres},
-    pose_prior='${dataset.divercam_wai.train.pose_prior}')"
+    pose_prior='${dataset.divercam_wai.train.pose_prior}',
+    num_forward_views=${dataset.divercam_wai.train.num_forward_views},
+    forward_sampling='${dataset.divercam_wai.train.forward_sampling}',
+    forward_offset=${dataset.divercam_wai.train.forward_offset},
+    forward_min_coverage=${dataset.divercam_wai.train.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.train.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.train.max_forward_fraction}, covis_version='${dataset.divercam_wai.train.covis_version}')"
 # "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
 split: 'holdout_boobyrock_soundtrap:train'
 dataset_resolution: ${dataset.resolution_train}
@@ -33,3 +37,20 @@ covisibility_thres: 0.25
 # what to feed the model's pose conditioning: none | ekf | gt | gt+noise.
 # 'gt' is LEAKAGE -- the pose head is supervised on those same poses.
 pose_prior: 'none'
+
+# Forward-camera views, budgeted INSIDE num_views. 0 keeps the scene downward-only,
+# so an unmodified divercam_wai tree behaves exactly as before.
+num_forward_views: 0
+# covis | offset. Same-instant down/forward footprint overlap is measured at ZERO
+# (the two abut), so "covis" is the principled default; "offset" takes the forward
+# frame forward_offset frames away, where overlap actually peaks.
+forward_sampling: 'covis'
+forward_offset: -60
+# forward depth is rendered from downward geometry and is structurally sparser than
+# min_coverage expects -- and absent entirely in the input-only arm
+forward_min_coverage: 0.0
+forward_covis_thres: 0.15
+covis_version: 'v0'
+# ceiling on the forward share of a window; 1.0 + num_forward_views==num_views
+# gives an all-forward window (eval-time exploration)
+max_forward_fraction: 0.25

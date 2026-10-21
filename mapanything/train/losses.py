@@ -662,7 +662,18 @@ class NonAmbiguousMaskLoss(Criterion, MultiLoss):
         self_name = type(self).__name__
 
         # Loop over the views
+        n_supervised = 0
         for view_idx, (gt, pred) in enumerate(zip(batch, preds)):
+            # Skip views whose mask is not a real label. DiverCam's forward views
+            # have no way to know which pixels are reconstructible until the fused
+            # downward cloud is rendered into them, and this loss is otherwise
+            # unmasked, so without the skip the head would be trained on a guess.
+            # Datasets that never set the flag are unaffected.
+            if "non_ambiguous_mask_known" in gt and not bool(
+                gt["non_ambiguous_mask_known"].all()
+            ):
+                continue
+            n_supervised += 1
             # Get the GT non-ambiguous masks
             gt_non_ambiguous_mask = gt["non_ambiguous_mask"]
 
@@ -679,8 +690,10 @@ class NonAmbiguousMaskLoss(Criterion, MultiLoss):
             mask_loss_details[f"{self_name}_mask_view{view_idx + 1}"] = float(loss)
             mask_loss_total += float(loss)
 
-        # Compute the average loss across all views
-        mask_loss_details[f"{self_name}_mask_avg"] = mask_loss_total / len(batch)
+        # Compute the average loss across the views that were supervised
+        mask_loss_details[f"{self_name}_mask_avg"] = mask_loss_total / max(
+            n_supervised, 1
+        )
 
         return Sum(*loss_list), (mask_loss_details | {})
 
@@ -3426,6 +3439,7 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
         pose_trans_loss_weight=1,
         scale_loss_weight=1,
         compute_absolute_pose_loss=True,
+        gate_pose_trans_on_depth=True,
         compute_pairwise_relative_pose_loss=False,
         convert_predictions_to_view0_frame=False,
         compute_world_frame_points_loss=True,
@@ -3485,6 +3499,13 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
         self.pose_trans_loss_weight = pose_trans_loss_weight
         self.scale_loss_weight = scale_loss_weight
         self.compute_absolute_pose_loss = compute_absolute_pose_loss
+        # Upstream gates pose_trans on the view having valid GT depth, using "no
+        # depth" as a proxy for "this view's pose GT is unreliable" -- sound when
+        # depth and pose come from the same reconstruction. DiverCam's forward
+        # views break that coupling: they carry no depth at all, but their pose is
+        # the rig calibration, which is exact and independent of any depth. Set
+        # False there to supervise translation on every view.
+        self.gate_pose_trans_on_depth = gate_pose_trans_on_depth
         self.compute_pairwise_relative_pose_loss = compute_pairwise_relative_pose_loss
         self.convert_predictions_to_view0_frame = convert_predictions_to_view0_frame
         self.compute_world_frame_points_loss = compute_world_frame_points_loss
@@ -3774,6 +3795,11 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
         valid_norm_factor_masks = [
             mask.sum(dim=(1, 2)) > 0 for mask in valid_masks
         ]  # List of (B,)
+        pose_trans_gates = (
+            valid_norm_factor_masks
+            if self.gate_pose_trans_on_depth
+            else [torch.ones_like(m) for m in valid_norm_factor_masks]
+        )
 
         if self.ambiguous_loss_value > 0:
             assert self.criterion.reduction == "none", (
@@ -3850,8 +3876,8 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
             ):
                 # Compute the absolute pose loss
                 # Get the pose info for the current view
-                pred_pose_trans = pred_info[i]["pose_trans"][valid_norm_factor_masks[i]]
-                gt_pose_trans = gt_info[i]["pose_trans"][valid_norm_factor_masks[i]]
+                pred_pose_trans = pred_info[i]["pose_trans"][pose_trans_gates[i]]
+                gt_pose_trans = gt_info[i]["pose_trans"][pose_trans_gates[i]]
                 pred_pose_quats = pred_info[i]["pose_quats"]
                 gt_pose_quats = gt_info[i]["pose_quats"]
 
@@ -3934,7 +3960,7 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
 
                     # Get the valid translations using valid_norm_factor_masks for current view and other view
                     overall_valid_mask_for_trans = (
-                        valid_norm_factor_masks[i] & valid_norm_factor_masks[ov_idx]
+                        pose_trans_gates[i] & pose_trans_gates[ov_idx]
                     )
 
                     # Append the relative poses
@@ -3982,8 +4008,8 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
                 pose_quats_losses.append(pose_quats_loss)
             elif self.compute_absolute_pose_loss:
                 # Get the pose info for the current view
-                pred_pose_trans = pred_info[i]["pose_trans"][valid_norm_factor_masks[i]]
-                gt_pose_trans = gt_info[i]["pose_trans"][valid_norm_factor_masks[i]]
+                pred_pose_trans = pred_info[i]["pose_trans"][pose_trans_gates[i]]
+                gt_pose_trans = gt_info[i]["pose_trans"][pose_trans_gates[i]]
                 pred_pose_quats = pred_info[i]["pose_quats"]
                 gt_pose_quats = gt_info[i]["pose_quats"]
 
@@ -4067,7 +4093,7 @@ class FactoredGeometryScaleRegr3D(Criterion, MultiLoss):
 
                     # Get the valid translations using valid_norm_factor_masks for current view and other view
                     overall_valid_mask_for_trans = (
-                        valid_norm_factor_masks[i] & valid_norm_factor_masks[ov_idx]
+                        pose_trans_gates[i] & pose_trans_gates[ov_idx]
                     )
 
                     # Append the relative poses
@@ -4266,6 +4292,7 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
         scale_loss_weight=1,
         compute_absolute_pose_loss=True,
         compute_pairwise_relative_pose_loss=False,
+        gate_pose_trans_on_depth=True,
         convert_predictions_to_view0_frame=False,
         compute_world_frame_points_loss=True,
         world_frame_points_loss_weight=1,
@@ -4324,6 +4351,7 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
             pose_trans_loss_weight=pose_trans_loss_weight,
             scale_loss_weight=scale_loss_weight,
             compute_absolute_pose_loss=compute_absolute_pose_loss,
+            gate_pose_trans_on_depth=gate_pose_trans_on_depth,
             compute_pairwise_relative_pose_loss=compute_pairwise_relative_pose_loss,
             convert_predictions_to_view0_frame=convert_predictions_to_view0_frame,
             compute_world_frame_points_loss=compute_world_frame_points_loss,
