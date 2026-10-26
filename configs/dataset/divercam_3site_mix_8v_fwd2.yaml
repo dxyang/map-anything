@@ -6,11 +6,12 @@ defaults:
 # inherited, not restated -- so the comparison isolates the camera change against
 # the conditioned 8-down run that is our headline result.
 #
-# This is the "input-only" arm: the forward views here carry no depth at all, so
+# This is the "input-only" experiment: the forward views here carry no depth at all, so
 # they are supervised on pose and ray directions -- both exact, from the rig
 # calibration and the forward intrinsics -- and contribute nothing to the depth
 # family of losses, which losses.py:2352 drops for a fully-invalid view. Point
-# `forward_depth` at rendered pseudo-depth in a sibling config for the other arm.
+# `forward_depth` at rendered pseudo-depth in a sibling config for the pseudo-depth
+# experiment.
 #
 # Two things to keep in mind when reading results from this config:
 #
