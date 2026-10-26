@@ -267,10 +267,9 @@ class DiverCamWAI(BaseDataset):
         if self.part not in spec:
             raise ValueError(f"split {self.split_name} has no '{self.part}' part")
 
-        # Precomputed per-survey frame masks, when the split uses them instead of
-        # segment indices. Every survey is one segment since the 2026-10 rebuild,
-        # so `segments`/`exclude_segments` has nothing left to select; validation
-        # is held back spatially instead. See scripts/divercam_make_split.py.
+        # Precomputed per-survey frame masks: the only way a split narrows a survey.
+        # See scripts/divercam_make_split.py for how they are built and why
+        # validation has to be held back spatially rather than by frame range.
         masks = {}
         if "split_masks" in spec:
             mask_path = self.ROOT / "splits" / f"{spec['split_masks']}.npz"
@@ -295,13 +294,23 @@ class DiverCamWAI(BaseDataset):
             # divercam_to_wai.py --forward, and carry a `partner_frame` naming the
             # downward frame they are rigidly attached to.
             is_fwd = np.array([f["frame_name"].endswith("_fwd") for f in meta["frames"]])
-            keep = set(member.get("segments", range(segments.max() + 1)))
-            keep -= set(member.get("exclude_segments", []))
-            in_segment = np.isin(segments, list(keep))
+            # Selecting DATA by segment index is gone. It only ever worked because
+            # the pre-2026-10 alignments reported 2-7 segments per survey, and those
+            # were artifacts of the wrong focal: with the rectified calibration every
+            # survey is one continuous run, so an index selected either everything or
+            # nothing. Validation is held back by the masks above instead. Raise
+            # rather than ignore the key, so an old split cannot quietly select all
+            # of a survey into both train and val.
+            for dead in ("segments", "exclude_segments"):
+                if dead in member:
+                    raise ValueError(
+                        f"split {self.split_name} member {label} uses `{dead}`, which "
+                        f"no longer selects anything -- every survey is one segment. "
+                        f"Use split_masks (scripts/divercam_make_split.py) instead.")
             # Per-camera coverage floors: a forward frame's depth is rendered from
             # downward geometry and is structurally sparser, and in the input-only
             # arm it has none at all, so the downward 0.3 would exclude every one.
-            allowed = in_segment & (coverage >= self.min_coverage) & ~is_fwd
+            allowed = (coverage >= self.min_coverage) & ~is_fwd
             key = f"{label}__{self.part}"
             if masks and key in masks:
                 # The masks cover DOWNWARD frames only, which the converter writes
@@ -624,6 +633,12 @@ class DiverCamWAI(BaseDataset):
 
     def _sample_temporal_window(self, scene_name, num_views):
         """A window of consecutive frames at a random stride, within one segment.
+
+        The segment guard is dormant on today's data -- every survey reconstructs
+        as one continuous run -- and is kept as insurance. A dive that does break
+        would otherwise hand back windows straddling a pose jump, silently, and
+        shorter or thinner dives are more likely to break, not less. The `segment`
+        field it reads comes from prepare_divercam_index.py's break detection.
 
         Segment-bounded on purpose: a window spanning a reconstruction
         discontinuity contains one frame pair whose relative pose is wrong by
