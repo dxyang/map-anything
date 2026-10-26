@@ -30,8 +30,9 @@ defaults:
 #   is 0.5) a dense downward set plus forward frames from anywhere in the survey.
 #
 # Needs a tree built with `divercam_to_wai.py --forward` and a covisibility matrix
-# rebuilt over the enlarged frame list, hence the separate ROOT: the downward-only
-# tree stays untouched so the established 8-view results remain reproducible.
+# rebuilt over the enlarged frame list. Since the 2026-10 rectified-intrinsics redo
+# that is the only tree -- the base divercam_wai config points at it too -- so the
+# ROOT and covis_version here restate the default rather than overriding it.
 
 divercam_wai:
   train:

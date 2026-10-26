@@ -19,13 +19,18 @@ dataset_str:
     forward_offset=${dataset.divercam_wai.val.forward_offset},
     forward_min_coverage=${dataset.divercam_wai.val.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.val.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.val.max_forward_fraction}, covis_version='${dataset.divercam_wai.val.covis_version}')"
 # "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
-split: 'holdout_boobyrock_soundtrap:val'
+split: 'holdout_boobyrock:val'
 dataset_resolution: ${dataset.resolution_val_divercam}
 principal_point_centered: ${dataset.principal_point_centered}
 seed: 777
 transform: 'imgnorm'
 data_norm_type: ${model.data_norm_type}
-ROOT: ${root_data_dir}/divercam_wai
+# One tree for every divercam experiment. It carries the forward frames as well,
+# but num_forward_views: 0 ignores them, and the down-down covisibility cells are
+# bit-identical either way, so a downward-only run reads exactly what it used to.
+# There used to be a separate downward-only divercam_wai tree; keeping two trees in
+# sync is how the raw-intrinsics calibration propagated into four places at once.
+ROOT: ${root_data_dir}/divercam_wai_fwd
 # probability of a consecutive-frame window instead of a covisibility set
 temporal_prob: 0.0
 # drop frames whose Metashape depth covers less than this fraction of pixels
@@ -50,7 +55,9 @@ forward_offset: -60
 # min_coverage expects -- and absent entirely in the input-only arm
 forward_min_coverage: 0.0
 forward_covis_thres: 0.15
-covis_version: 'v0'
+# v1 fixed the cross-camera statistic (target-image coverage, not fraction-of-source-
+# points, which saturated). Same-camera cells are bit-identical to the retired v0.
+covis_version: 'v1'
 # ceiling on the forward share of a window; 1.0 + num_forward_views==num_views
 # gives an all-forward window (eval-time exploration)
 max_forward_fraction: 0.25

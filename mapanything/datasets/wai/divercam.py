@@ -260,8 +260,25 @@ class DiverCamWAI(BaseDataset):
     def _load_data(self):
         spec = yaml.safe_load((self.split_dir / f"{self.split_name}.yaml").read_text())
         dives = {d["label"]: d for d in yaml.safe_load(self.manifest.read_text())["dives"]}
+        if "deprecated" in spec:
+            raise ValueError(
+                f"split {self.split_name} is deprecated and must not be used: "
+                f"{spec['deprecated']}")
         if self.part not in spec:
             raise ValueError(f"split {self.split_name} has no '{self.part}' part")
+
+        # Precomputed per-survey frame masks, when the split uses them instead of
+        # segment indices. Every survey is one segment since the 2026-10 rebuild,
+        # so `segments`/`exclude_segments` has nothing left to select; validation
+        # is held back spatially instead. See scripts/divercam_make_split.py.
+        masks = {}
+        if "split_masks" in spec:
+            mask_path = self.ROOT / "splits" / f"{spec['split_masks']}.npz"
+            if not mask_path.is_file():
+                raise FileNotFoundError(
+                    f"split {self.split_name} wants masks {mask_path}; build them "
+                    f"with scripts/divercam_make_split.py --name {spec['split_masks']}")
+            masks = dict(np.load(mask_path))
 
         self.scenes, self.scene_allowed, self.scene_metric = [], {}, {}
         self.scene_segments, self.scene_dive_root = {}, {}
@@ -285,6 +302,27 @@ class DiverCamWAI(BaseDataset):
             # downward geometry and is structurally sparser, and in the input-only
             # arm it has none at all, so the downward 0.3 would exclude every one.
             allowed = in_segment & (coverage >= self.min_coverage) & ~is_fwd
+            key = f"{label}__{self.part}"
+            if masks and key in masks:
+                # The masks cover DOWNWARD frames only, which the converter writes
+                # first; pad with False so forward frames are admitted solely
+                # through the partner rule below.
+                m = masks[key]
+                if len(m) > len(meta["frames"]):
+                    raise ValueError(
+                        f"mask {key} has {len(m)} frames but {label} has "
+                        f"{len(meta['frames'])}; the masks predate this tree")
+                padded = np.zeros(len(meta["frames"]), bool)
+                padded[: len(m)] = m
+                allowed &= padded
+            elif masks and self.part in ("train", "val"):
+                # A train/val member with no mask is a silent full-survey include,
+                # which is how a validation set ends up containing its own training
+                # frames. A held-out test site legitimately has no mask.
+                raise KeyError(
+                    f"split {self.split_name} lists {label} in '{self.part}' but "
+                    f"its mask file has no {key}; rebuild with "
+                    f"scripts/divercam_make_split.py")
             # the dive's down/ directory, which is where left_ekf_sync.csv lives
             self.scene_dive_root[label] = Path(dives[label]["root"])
             if self.pose_prior == "ekf":
