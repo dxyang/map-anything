@@ -45,37 +45,70 @@ class _SplitMaskedCovisibility:
         return np.asarray(self._covis[row, col]) * self._allowed
 
 
-# Cam0 <- IMU/DVL (Nortek) extrinsic, Kalibr convention p_cam = T_CAM_IMU @ p_imu.
-# Downward camera (left), 2026-05-18-20-52-54 session, cam0. Copied from
-# loggerhead/scripts/tier0_fusion.py rather than imported: that lives outside this
-# submodule, and the numbers are calibration constants, not logic.
-T_CAM_IMU_DWN = np.array([
+# Rig extrinsics, in the RECTIFIED camera frames.
+#
+# Which frame these are in is the whole point of this block, so to be explicit:
+# every image this dataset reads is an SDK-RECTIFIED left eye, and rectification
+# ROTATES that eye -- 0.3724 deg downward, 0.1803 deg forward -- to put
+# corresponding points on a shared row. Kalibr, however, solved on the RAW image
+# topics. A raw-frame extrinsic therefore does not apply to the frames we actually
+# have. The raw Kalibr numbers are kept below as the calibration of record, and the
+# constants in use are those numbers with the rectification rotations composed in.
+#
+# Copied from loggerhead/scripts/divercam_rig.py rather than imported: that lives
+# outside this submodule. Regenerate with `python scripts/divercam_rig.py`, which
+# derives the rectification rotations from the camchain YAMLs and prints these
+# matrices. Do not hand-edit them -- a hand substitution that never happened is
+# exactly how the rectified-intrinsics bug survived five months.
+
+# --- Kalibr calibrations, RAW sensor frames. Reference only; not used below. ---
+# Cam0 <- IMU/DVL (Nortek), Kalibr convention p_cam = T_CAM_IMU @ p_imu. Downward
+# camera (left), 2026-05-18-20-52-54 session, cam0.
+T_DwnCamRaw_Imu = np.array([
     [-0.9995122254784973, 0.030794861284595153, -0.00519496270292499, -0.003938369353851938],
     [-0.03076301546465094, -0.9995080768743684, -0.0061025521238302904, 0.18638744857761158],
     [-0.005380334426769991, -0.005939762736419775, 0.9999678850943623, 0.008426479247768631],
     [0.0, 0.0, 0.0, 1.0],
 ])
-# Static TF base_link -> dvl_link from diver_zedxm_system.launch (yaw pi/2, roll pi).
-_T_BASE_DVL = np.eye(4)
-_T_BASE_DVL[:3, :3] = np.array([[0., 1., 0.], [1., 0., 0.], [0., 0., -1.]])
-# base_link <- camera. The EKF publishes the BODY pose, so a body pose must be
-# post-multiplied by this to become a camera pose. Skipping it leaves a constant
-# conjugation by the ~19 cm camera/IMU offset in the relative poses, which at the
-# rotations a diver makes is centimetres -- the size of the error being measured.
-T_BASE_CAM_DWN = _T_BASE_DVL @ np.linalg.inv(T_CAM_IMU_DWN)
-
-# Forward-left <- downward-left, the direct cross-camera Kalibr calibration (63.40 deg,
-# 7.78 cm). Copied from scripts/divercam_rig.py, which documents why this calibration
+# Forward-left <- downward-left, the direct cross-camera Kalibr calibration
+# (63.40 deg raw, 7.78 cm). scripts/divercam_rig.py documents why this calibration
 # rather than the separate forward-IMU session one: the two disagree by 0.56 deg and
 # mixing them would bias the prior against the target on every cross-camera pair.
-# Named in the current T_A_B convention; the constants above keep their older names
-# because tier0_fusion.py, which they were copied from, is not being touched.
-T_FwdCam_DwnCam = np.array([
+T_FwdCamRaw_DwnCamRaw = np.array([
     [0.99969651911556, 0.008268429247972756, 0.023205661938492293, 0.0018840797739952551],
     [-0.024450998089428966, 0.4478687407825575, 0.8937649241955496, 0.06123247357646312],
     [-0.003003058551387631, -0.8940610852215956, 0.44793499252873664, -0.04801432725985006],
     [0.0, 0.0, 0.0, 1.0],
 ])
+
+# --- RECTIFIED frames. These are the ones used. ---
+# Downward-left <- IMU. Differs from T_DwnCamRaw_Imu by the 0.3724 deg rectification
+# rotation; the translation moves 0.24 mm, since rectification spins about the
+# optical centre.
+T_DwnCam_Imu = np.array([
+    [-0.9994912814254627, 0.03187188225773635, 0.0011668229669765063, -0.004092737168596928],
+    [-0.031879179987336644, -0.9994680015736195, -0.006887068590554017, 0.1863762984307613],
+    [0.0009466983797751173, -0.006920762370215491, 0.9999756031075925, 0.008597800804207219],
+    [0.0, 0.0, 0.0, 1.0],
+])
+# Forward-left <- downward-left: 63.5210 deg, 7.7835 cm. The raw matrix above is
+# 0.354 deg off in this frame, about 8 mm of lateral error at a 1.3 m working
+# distance, and it lands first-order on every forward view's pose prior.
+T_FwdCam_DwnCam = np.array([
+    [0.9997600190329058, 0.0116649035753588, 0.018542771311238812, 0.002101487256372268],
+    [-0.021799044389390395, 0.44591652272217286, 0.8948090614354969, 0.06116288276136945],
+    [0.0021693333152623235, -0.8949985389864851, 0.4460637949946441, -0.048093936444559136],
+    [0.0, 0.0, 0.0, 1.0],
+])
+
+# Static TF base_link -> dvl_link from diver_zedxm_system.launch (yaw pi/2, roll pi).
+_T_Base_Imu = np.eye(4)
+_T_Base_Imu[:3, :3] = np.array([[0., 1., 0.], [1., 0., 0.], [0., 0., -1.]])
+# base_link <- camera. The EKF publishes the BODY pose, so a body pose must be
+# post-multiplied by this to become a camera pose. Skipping it leaves a constant
+# conjugation by the ~19 cm camera/IMU offset in the relative poses, which at the
+# rotations a diver makes is centimetres -- the size of the error being measured.
+T_Base_DwnCam = _T_Base_Imu @ np.linalg.inv(T_DwnCam_Imu)
 
 
 def _load_ekf_camera_poses(csv_path):
@@ -100,7 +133,7 @@ def _load_ekf_camera_poses(csv_path):
             T = np.eye(4)
             T[:3, :3] = Rotation.from_quat(q).as_matrix()
             T[:3, 3] = t
-            out[row["frame"]] = (T @ T_BASE_CAM_DWN).astype(np.float32)
+            out[row["frame"]] = (T @ T_Base_DwnCam).astype(np.float32)
     return out
 
 
