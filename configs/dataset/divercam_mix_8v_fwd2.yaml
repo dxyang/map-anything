@@ -1,7 +1,7 @@
 defaults:
-  - divercam_3site_mix_cond_8v
+  - divercam_mix_cond_8v
 
-# divercam_3site_mix_cond_8v with two of the eight views taken from the FORWARD
+# divercam_mix_cond_8v with two of the eight views taken from the FORWARD
 # camera. Everything else is held fixed -- including `pose_prior: 'ekf'`, which is
 # inherited, not restated -- so the comparison isolates the camera change against
 # the conditioned 8-down run that is our headline result.

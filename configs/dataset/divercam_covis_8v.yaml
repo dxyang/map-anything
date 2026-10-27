@@ -1,9 +1,16 @@
 defaults:
   - default
 
-# The three-site training run: tektite + yawzi + joels (59,502 frames), with
-# boobyrock and soundtrap held out entirely as unseen sites. Validation is the
-# smallest segment of each training site, so it is in-domain for all three.
+# Covisibility-only sampling: `temporal_prob` stays at the default 0.0, so every
+# window is a random walk over the covisibility graph. `divercam_mix_8v` is this
+# config with half the windows drawn temporally instead; the pair is what measures
+# whether temporal windows help.
+#
+# Which surveys train and which are held out is NOT set here -- it comes from
+# `dataset/divercam_wai/{train,val}/default.yaml`, currently `holdout_boobyrock`.
+# Validation is held back SPATIALLY within each training survey (see
+# scripts/divercam_make_split.py); it used to be a frame range, which leaked
+# 19-31% of training frames through covisibility.
 #
 # 5_000 samples per epoch is chosen for check-in granularity rather than for any
 # statistical reason: on 3 GPUs at ~1.6 s/iteration that is ~45 min, so held-out

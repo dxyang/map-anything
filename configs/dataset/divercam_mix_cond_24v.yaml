@@ -1,8 +1,8 @@
 defaults:
   - default
 
-# divercam_3site_mix_24v plus EKF pose conditioning: the 24-view arm of the same
-# paired comparison divercam_3site_mix_cond_8v makes at 8 views. Everything else
+# divercam_mix_24v plus EKF pose conditioning: the 24-view arm of the same
+# paired comparison divercam_mix_cond_8v makes at 8 views. Everything else
 # is held fixed against the 24v run so the only variable is the prior.
 #
 # Why both arms at 24 views matter: at 8 views the prior bought operating

@@ -1,7 +1,7 @@
 defaults:
   - default
 
-# Identical to divercam_3site_mix_8v except num_views: 24. The one variable.
+# Identical to divercam_mix_8v except num_views: 24. The one variable.
 #
 # Why: the view-count ablation (scripts/ablate_num_views.py, 60 windows/site)
 # found both the pretrained model and our 8-view fine-tune peak at N=4-8 and

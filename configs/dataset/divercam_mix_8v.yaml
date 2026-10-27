@@ -1,7 +1,7 @@
 defaults:
   - default
 
-# Identical to divercam_3site_8v except that half the training samples are
+# Identical to divercam_covis_8v except that half the training samples are
 # consecutive-frame windows rather than covisibility sets. Everything else is
 # held fixed so the comparison isolates the sampling change.
 #

@@ -1,7 +1,7 @@
 defaults:
   - default
 
-# divercam_3site_mix_8v plus EKF pose conditioning. Everything else is held fixed
+# divercam_mix_8v plus EKF pose conditioning. Everything else is held fixed
 # so the comparison against that run isolates the conditioning.
 #
 # Why now: as of 2026-10-14 all six surveys have proprioception synced, so all

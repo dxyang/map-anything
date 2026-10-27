@@ -1,7 +1,7 @@
 defaults:
-  - divercam_3site_mix_cond_8v
+  - divercam_mix_cond_8v
 
-# The matched control for divercam_3site_mix_8v_fwd2: SIX downward views and no
+# The matched control for divercam_mix_8v_fwd2: SIX downward views and no
 # forward ones, so the two configs differ only by the two forward views.
 #
 # Why this exists. The forward run is 8 views of which 2 are forward, i.e. 6
