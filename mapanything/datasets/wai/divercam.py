@@ -164,6 +164,8 @@ class DiverCamWAI(BaseDataset):
         forward_min_coverage=0.0,
         forward_covis_thres=0.15,
         max_forward_fraction=0.25,
+        sample_forward_count=False,
+        forward_depth_supervision=True,
         covis_version="v0",
         **kwargs,
     ):
@@ -281,6 +283,8 @@ class DiverCamWAI(BaseDataset):
         self.forward_offset = forward_offset
         self.forward_covis_thres = forward_covis_thres
         self.max_forward_fraction = max_forward_fraction
+        self.sample_forward_count = sample_forward_count
+        self.forward_depth_supervision = forward_depth_supervision
         self.covis_version = covis_version
         self.forward_min_coverage = forward_min_coverage
         self._ekf_cache = {}
@@ -535,10 +539,15 @@ class DiverCamWAI(BaseDataset):
         # views are purely downward. Raise it to 1.0 for an all-forward window.
         n_fwd = 0
         if self.num_forward_views and self.forced_view_indices is None:
-            n_fwd = min(
-                self.num_forward_views,
-                int(num_views_to_sample * self.max_forward_fraction),
-            )
+            cap = min(self.num_forward_views,
+                      int(num_views_to_sample * self.max_forward_fraction))
+            # Pinning n_fwd at the ceiling means the model only ever sees ONE
+            # composition for a given view count -- 2 forward at 8 views, never 0,
+            # 1, 3 or 4. That is what makes a model brittle to composition: the
+            # downward-only model degraded +3.76 mm (p<0.001) when 2 forward views
+            # appeared at inference, while the forward-trained one did not. Drawing
+            # the count instead makes composition a variable the model trains over.
+            n_fwd = int(self._rng.integers(0, cap + 1)) if self.sample_forward_count else cap
         n_down = num_views_to_sample - n_fwd
 
         if n_down == 0:
@@ -712,7 +721,13 @@ class DiverCamWAI(BaseDataset):
             # depth and pose_trans for the whole sample.
             frame_meta = scene_meta["frames"][view_index]
             is_fwd = frame_meta["frame_name"].endswith("_fwd")
-            has_depth = "depth" in frame_meta
+            # Forward views can be INPUT ONLY: the pseudo-depth exists and is used
+            # to build the covisibility matrix, but is withheld from the loss. The
+            # zero depthmap below is what losses.py:2352 drops, so a forward view
+            # then contributes tokens and a pose prior and nothing else.
+            is_fwd_frame = frame_meta["frame_name"].endswith("_fwd")
+            has_depth = "depth" in frame_meta and not (
+                is_fwd_frame and not self.forward_depth_supervision)
             view_data = load_frame(
                 scene_root, view_file_name,
                 modalities=["image", "depth"] if has_depth else ["image"],
