@@ -17,7 +17,7 @@ dataset_str:
     num_forward_views=${dataset.divercam_wai.train.num_forward_views},
     forward_sampling='${dataset.divercam_wai.train.forward_sampling}',
     forward_offset=${dataset.divercam_wai.train.forward_offset},
-    forward_min_coverage=${dataset.divercam_wai.train.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.train.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.train.max_forward_fraction}, covis_version='${dataset.divercam_wai.train.covis_version}')"
+    forward_min_coverage=${dataset.divercam_wai.train.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.train.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.train.max_forward_fraction}, sample_forward_count=${dataset.divercam_wai.train.sample_forward_count}, forward_depth_supervision=${dataset.divercam_wai.train.forward_depth_supervision}, covis_version='${dataset.divercam_wai.train.covis_version}')"
 # "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
 split: 'holdout_boobyrock:train'
 dataset_resolution: ${dataset.resolution_train}
@@ -61,3 +61,9 @@ covis_version: 'v1'
 # ceiling on the forward share of a window; 1.0 + num_forward_views==num_views
 # gives an all-forward window (eval-time exploration)
 max_forward_fraction: 0.25
+# Draw the forward count from U(0, cap) instead of pinning it at the cap, so
+# window composition is trained over rather than fixed.
+sample_forward_count: false
+# Forward pseudo-depth builds the covisibility matrix but is withheld from the
+# loss: forward views are input-side information only for now.
+forward_depth_supervision: false

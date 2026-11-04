@@ -1,0 +1,31 @@
+# Forward-view composition experiment, D: sampled 0-4 forward.
+#
+# Five configs differ in ONE thing: how many of a window's 8 views come from the
+# forward camera. Everything else is held fixed -- covisibility v2, the EKF prior,
+# and forward_depth_supervision FALSE, so forward views contribute tokens and a
+# pose prior but are not supervised. Their pseudo-depth is what built covisibility
+# v2; it is deliberately withheld from the loss for now.
+#
+# forward_covis_thres is 0.45, not the old 0.15. That threshold was set when
+# cross-camera cells were a frustum-test upper bound capped at 0.31 ("is this
+# patch in view"). With forward depth they are occlusion-aware and run to 1.0 with
+# a median of 0.41-0.58, so 0.15 admits nearly everything. 0.45 sits at the
+# cross-camera median, matching the selectivity 0.25 gives the same-camera blocks.
+#
+# Wider spread, 4-8 downward views.
+
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &fwd
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    forward_covis_thres: 0.45
+    forward_depth_supervision: false
+    num_forward_views: 6
+    forward_sampling: 'auto'
+    sample_forward_count: true
+    max_forward_fraction: 0.5
+  val:
+    <<: *fwd
