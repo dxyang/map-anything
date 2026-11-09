@@ -1,0 +1,37 @@
+# Forward-view experiment batch 2 (fwd6_covissamp_nodepth_notemp).
+#
+# Batch 1 established: forward views help only a model trained on them, wider
+# composition variety is better (sampled 0-6 won both window types), and the
+# pose gain is ~3x the shape gain. Batch 2 changes two things and holds the rest.
+#
+# forward_sampling 'covis' rather than 'auto'. 'auto' used "offset" for temporal
+# windows, restricting forward candidates to partners within 60 frames of the
+# window. That structurally excludes the case we care about: a temporally distant
+# forward view that sees the same ground, which is what a loop closure IS.
+# Covisibility window 0 of the boobyrock holdout is exactly it -- 11,382 frames
+# apart, cameras within 0.91 m, 26.7 mm error.
+#
+# sampled 0-6 forward (cap 6 of 8, redrawn per window) throughout: the best arm
+# in both window types in batch 1.
+#
+# Forward views INPUT ONLY, NO temporal windows. Every window is a
+# covisibility set, so the recipe assumes nothing about the data arriving as
+# a stream -- the generic case. Against fwd6_covissamp_nodepth_tmix this
+# isolates what the consecutive-frame assumption is worth.
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &cfg
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    forward_covis_thres: 0.45
+    forward_sampling: 'covis'
+    num_forward_views: 6
+    sample_forward_count: true
+    max_forward_fraction: 0.75
+    forward_depth_supervision: false
+    forward_depth_max_range: 0.0
+    temporal_prob: 0.0
+  val:
+    <<: *cfg

@@ -166,6 +166,17 @@ class DiverCamWAI(BaseDataset):
         max_forward_fraction=0.25,
         sample_forward_count=False,
         forward_depth_supervision=True,
+        # Metres. Forward pseudo-depth beyond this is zeroed, so it falls out of
+        # valid_mask and never reaches the loss. Measured, not guessed: against the
+        # forward camera's own ZED stereo on 12.9M overlapping boobyrock pixels the
+        # median pseudo/ZED ratio holds at 1.018-1.046 out to 4 m, then breaks down
+        # (1.112 at 4-5 m, 1.248 at 5-6 m, 4.32 beyond 8 m). A 4 m gate keeps 87.6%
+        # of valid pseudo-depth pixels. ZED also degrades with range underwater, so
+        # this marks where the two sources stop corroborating rather than where the
+        # pseudo-depth is provably wrong -- but it is the only independent check
+        # available. 0 disables the gate. Downward depth is never gated: it is
+        # Metashape MVS with its own 'mild' consistency filter applied upstream.
+        forward_depth_max_range=0.0,
         covis_version="v0",
         **kwargs,
     ):
@@ -285,6 +296,7 @@ class DiverCamWAI(BaseDataset):
         self.max_forward_fraction = max_forward_fraction
         self.sample_forward_count = sample_forward_count
         self.forward_depth_supervision = forward_depth_supervision
+        self.forward_depth_max_range = forward_depth_max_range
         self.covis_version = covis_version
         self.forward_min_coverage = forward_min_coverage
         self._ekf_cache = {}
@@ -740,6 +752,9 @@ class DiverCamWAI(BaseDataset):
                 # EXRs hold raw chunk-internal depth; metres need the scene's factor
                 depthmap = view_data["depth"].numpy().astype(np.float32) * depth_scale
                 depthmap = np.nan_to_num(depthmap, nan=0.0, posinf=0.0, neginf=0.0)
+                if is_fwd_frame and self.forward_depth_max_range > 0:
+                    # Zeroing is what removes it: valid_mask is depth > 0.
+                    depthmap[depthmap > self.forward_depth_max_range] = 0.0
             else:
                 depthmap = np.zeros(image.shape[:2], dtype=np.float32)
             intrinsics = view_data["intrinsics"].numpy().astype(np.float32)
