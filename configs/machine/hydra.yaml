@@ -1,10 +1,22 @@
 defaults:
   - default
 
-# WHOI hydra SLURM cluster. There is no /srv/warplab mount here, so everything
-# is a copy under /user/dayang pushed with rsync -- see docs/hydra-setup.md.
-# Root directory containing all datasets
-root_data_dir: "/user/dayang/data"
+# WHOI hydra SLURM cluster.
+#
+# /srv/warplab IS mounted here, as /proj/warplab -- same filesystem, writable,
+# verified by identical size and mtime on scene_meta.json. The earlier belief
+# that it was not cost a 500 GB redundant copy and a quota outage.
+#
+# root_data_dir therefore points at warplab, so the WAI tree is read in place
+# and nothing has to be synced. This only works because the tree's ~195k depth
+# symlinks were made RELATIVE (scripts/divercam_relativize_depth_links.py);
+# while they were absolute /srv/warplab paths they all dangled here, and `ls`
+# counted them happily so only a read revealed it.
+#
+# Experiment OUTPUT deliberately stays on /user/dayang and is copied to warplab
+# afterwards. /user has a 1025 GB hard quota, so watch it: keep_freq=0 in
+# slurm/hydra_fwd2.sbatch holds a run to ~31 GB instead of ~71 GB.
+root_data_dir: "/proj/warplab/home/dxy"
 # Dataset metadata directory (unused by divercam: splits come from
 # loggerhead/configs/splits and per-scene metadata from scene_meta.json)
 mapanything_dataset_metadata_dir: "/user/dayang/data/mapanything_dataset_metadata"
