@@ -1,0 +1,59 @@
+# Forward-view experiment: fwdtrans_support2_depth_uncapped
+#
+# All four runs here supervise forward-camera pose TRANSLATION directly (hence
+# the fwdtrans prefix); they differ only in the two variables named below.
+# Batch 2 found two things that make this batch necessary.
+#
+# 1. The pose-translation loss is gated on a view having valid GT depth, so
+#    forward views WITHOUT depth supervision never had their translation
+#    supervised at all -- only their rotation. The flag meant to disable that
+#    gate existed but had no effect in the loss class we train with. Fixed and
+#    verified by A/B on identical data: pose_trans_avg 0.70 gated, 3.53
+#    un-gated. Every run here uses loss=overall_loss_fwd_trans, so forward
+#    translation is supervised directly from the rig calibration -- targets that
+#    are exact and independent of any depth.
+#
+# 2. Camera-centre error depends on how many downward views see the same ground,
+#    INDEPENDENTLY of range. Measured on 300 selected forward views: grouped by
+#    how many of the window's 6 downward frames see >0.45 of the forward image,
+#    median error is 419 / 249 / 240 / 174 mm for 1 / 2 / 3 / 4+ frames, while
+#    mean distance from view 0 stays flat at 2.68-3.02 m. Under the old rule 33%
+#    of selections are one-frame cases.
+#
+# Range is deliberately NOT capped. At matched distance from view 0, forward
+# views are only 1.13-1.42x worse than downward, and the long-baseline ones are
+# the loop-closure cases worth having. The fix is to require multi-view support,
+# not to exclude distance.
+#
+# forward_min_support rather than a mean-overlap score: scoring by the mean
+# admits frames whose six cells are all weak but average above threshold -- 26%
+# of selections under mean>0.25 had NO downward frame above 0.45, a regime the
+# error measurement never covered. Requiring 2 cells above 0.45 is exactly the
+# measured quantity, and was calibrated at a median pool of 457 candidates per
+# window with 0% empty windows.
+# THIS RUN: forward pseudo-depth with NO range gate. The 4 m cap exists
+# because beyond it pseudo-depth stops agreeing with the forward camera's own
+# ZED stereo (median ratio 1.112 at 4-5 m, 1.248 at 5-6 m, 4.32 beyond 8 m),
+# but ZED stereo also degrades with range underwater, so that cannot say WHICH
+# source is wrong -- only that they diverge. The far structure is exactly what
+# the forward camera should contribute for loop closure, so whether
+# supervising it helps or hurts is worth measuring. Against depth4m_support2
+# this isolates the gate.
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &cfg
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    forward_sampling: 'covis'
+    forward_covis_thres: 0.45
+    num_forward_views: 6
+    sample_forward_count: true
+    max_forward_fraction: 0.75
+    temporal_prob: 0.0
+    forward_min_support: 2
+    forward_depth_supervision: true
+    forward_depth_max_range: 0.0
+  val:
+    <<: *cfg

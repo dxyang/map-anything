@@ -177,6 +177,35 @@ class DiverCamWAI(BaseDataset):
         # available. 0 disables the gate. Downward depth is never gated: it is
         # Metashape MVS with its own 'mild' consistency filter applied upstream.
         forward_depth_max_range=0.0,
+        # How a forward frame's covisibility against the window's downward frames
+        # is collapsed into one score. "max" takes its overlap with whichever
+        # single downward frame it overlaps best; "mean" averages across all of
+        # them, so a frame tied into the window by one view scores low.
+        #
+        # Measured 2026-11-11 on 300 selected forward views, boobyrock: grouped by
+        # how many downward frames see >0.45 of the forward image, camera-centre
+        # error runs 419 / 249 / 240 / 174 mm median for 1 / 2 / 3 / 4+ frames,
+        # while mean distance from view 0 stays flat at 2.68-3.02 m. So the count
+        # drives error independently of range, and 19.7% of selections under "max"
+        # are one-frame cases. "mean" shifts selection toward the well-constrained
+        # end WITHOUT capping range, which matters because the long-baseline
+        # forward views are the loop-closure cases worth having.
+        #
+        # forward_covis_thres must be recalibrated when this changes: the mean of
+        # six values is far below their max, so the "max" threshold admits almost
+        # nothing under "mean".
+        forward_score="max",
+        # How many of the window's downward frames must individually see more
+        # than forward_covis_thres of the forward frame before it is eligible.
+        # 1 reproduces the original behaviour exactly.
+        #
+        # This is separate from forward_score on purpose. Scoring by the mean
+        # alone admits frames whose six cells are all weak but average above the
+        # threshold -- measured, 26% of selections under mean>0.25 had NO
+        # downward frame seeing >0.45, a regime the error measurement never
+        # covered and so cannot justify. Requiring support puts a floor under
+        # individual overlap; the score then ranks what is left.
+        forward_min_support=1,
         covis_version="v0",
         **kwargs,
     ):
@@ -297,6 +326,10 @@ class DiverCamWAI(BaseDataset):
         self.sample_forward_count = sample_forward_count
         self.forward_depth_supervision = forward_depth_supervision
         self.forward_depth_max_range = forward_depth_max_range
+        assert forward_score in ("max", "mean"), forward_score
+        self.forward_score = forward_score
+        assert forward_min_support >= 1, forward_min_support
+        self.forward_min_support = forward_min_support
         self.covis_version = covis_version
         self.forward_min_coverage = forward_min_coverage
         self._ekf_cache = {}
@@ -674,7 +707,13 @@ class DiverCamWAI(BaseDataset):
         if not eligible.any():
             return []
         rows = np.stack([np.asarray(covis_raw[int(d), :]) for d in down])
-        score = rows.max(0) * eligible
+        collapse = rows.max(0) if self.forward_score == "max" else rows.mean(0)
+        if self.forward_min_support > 1:
+            # Count how many downward frames individually clear the threshold,
+            # and drop frames supported by fewer than the required number.
+            support = (rows > self.forward_covis_thres).sum(0)
+            eligible = eligible & (support >= self.forward_min_support)
+        score = collapse * eligible
         picked = []
         for _ in range(n_fwd):
             ok = np.flatnonzero(score > self.forward_covis_thres)

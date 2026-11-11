@@ -17,7 +17,7 @@ dataset_str:
     num_forward_views=${dataset.divercam_wai.train.num_forward_views},
     forward_sampling='${dataset.divercam_wai.train.forward_sampling}',
     forward_offset=${dataset.divercam_wai.train.forward_offset},
-    forward_min_coverage=${dataset.divercam_wai.train.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.train.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.train.max_forward_fraction}, sample_forward_count=${dataset.divercam_wai.train.sample_forward_count}, forward_depth_supervision=${dataset.divercam_wai.train.forward_depth_supervision}, forward_depth_max_range=${dataset.divercam_wai.train.forward_depth_max_range}, covis_version='${dataset.divercam_wai.train.covis_version}')"
+    forward_min_coverage=${dataset.divercam_wai.train.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.train.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.train.max_forward_fraction}, sample_forward_count=${dataset.divercam_wai.train.sample_forward_count}, forward_depth_supervision=${dataset.divercam_wai.train.forward_depth_supervision}, forward_depth_max_range=${dataset.divercam_wai.train.forward_depth_max_range}, forward_score='${dataset.divercam_wai.train.forward_score}', forward_min_support=${dataset.divercam_wai.train.forward_min_support}, covis_version='${dataset.divercam_wai.train.covis_version}')"
 # "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
 split: 'holdout_boobyrock:train'
 dataset_resolution: ${dataset.resolution_train}
@@ -71,3 +71,13 @@ forward_depth_supervision: false
 # valid_mask. 0 disables. 4.0 is where pseudo-depth stops agreeing with the
 # forward camera's own ZED stereo; see the dataloader for the measurement.
 forward_depth_max_range: 0.0
+# max | mean. How a forward frame's covisibility against the window's downward
+# frames is collapsed into one score. "max" admits it on its single best
+# overlap; "mean" requires it to be seen by several. forward_covis_thres must be
+# recalibrated when this changes -- the mean of six values is far below the max.
+forward_score: 'max'
+# How many downward frames must individually see more than forward_covis_thres
+# of the forward frame. 1 = original behaviour. Separate from forward_score:
+# mean scoring alone admits broadly-but-weakly overlapped frames, which the
+# error measurement never covered.
+forward_min_support: 1
