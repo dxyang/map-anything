@@ -4378,6 +4378,24 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
         valid_norm_factor_masks = [
             mask.sum(dim=(1, 2)) > 0 for mask in valid_masks
         ]  # List of (B,)
+        # gate_pose_trans_on_depth is honoured HERE as well as in the parent.
+        # This override reimplements compute_loss, and the first version of the
+        # flag only touched the parent -- so setting it False silently did
+        # nothing for the loss we actually train with
+        # (FactoredGeometryScaleRegr3DPlusNormalGMLoss). Same failure as the
+        # dataset_str flags that are ignored unless listed.
+        #
+        # Why un-gating is sound: the normalisation factor comes from
+        # normalize_multiple_pointclouds pooled over ALL views, so it is a
+        # per-sample scalar supplied by the downward views, and a forward view's
+        # translation target is well defined even with no depth of its own. The
+        # gate exists for views with no geometry at all; ours have exact
+        # rig-derived poses, which is not the case it was written for.
+        pose_trans_gates = (
+            valid_norm_factor_masks
+            if self.gate_pose_trans_on_depth
+            else [torch.ones_like(m) for m in valid_norm_factor_masks]
+        )
 
         if self.ambiguous_loss_value > 0:
             assert self.criterion.reduction == "none", (
@@ -4490,8 +4508,8 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
             ):
                 # Compute the absolute pose loss
                 # Get the pose info for the current view
-                pred_pose_trans = pred_info[i]["pose_trans"][valid_norm_factor_masks[i]]
-                gt_pose_trans = gt_info[i]["pose_trans"][valid_norm_factor_masks[i]]
+                pred_pose_trans = pred_info[i]["pose_trans"][pose_trans_gates[i]]
+                gt_pose_trans = gt_info[i]["pose_trans"][pose_trans_gates[i]]
                 pred_pose_quats = pred_info[i]["pose_quats"]
                 gt_pose_quats = gt_info[i]["pose_quats"]
 
@@ -4574,7 +4592,7 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
 
                     # Get the valid translations using valid_norm_factor_masks for current view and other view
                     overall_valid_mask_for_trans = (
-                        valid_norm_factor_masks[i] & valid_norm_factor_masks[ov_idx]
+                        pose_trans_gates[i] & pose_trans_gates[ov_idx]
                     )
 
                     # Append the relative poses
@@ -4622,8 +4640,8 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
                 pose_quats_losses.append(pose_quats_loss)
             elif self.compute_absolute_pose_loss:
                 # Get the pose info for the current view
-                pred_pose_trans = pred_info[i]["pose_trans"][valid_norm_factor_masks[i]]
-                gt_pose_trans = gt_info[i]["pose_trans"][valid_norm_factor_masks[i]]
+                pred_pose_trans = pred_info[i]["pose_trans"][pose_trans_gates[i]]
+                gt_pose_trans = gt_info[i]["pose_trans"][pose_trans_gates[i]]
                 pred_pose_quats = pred_info[i]["pose_quats"]
                 gt_pose_quats = gt_info[i]["pose_quats"]
 
@@ -4707,7 +4725,7 @@ class FactoredGeometryScaleRegr3DPlusNormalGMLoss(FactoredGeometryScaleRegr3D):
 
                     # Get the valid translations using valid_norm_factor_masks for current view and other view
                     overall_valid_mask_for_trans = (
-                        valid_norm_factor_masks[i] & valid_norm_factor_masks[ov_idx]
+                        pose_trans_gates[i] & pose_trans_gates[ov_idx]
                     )
 
                     # Append the relative poses
