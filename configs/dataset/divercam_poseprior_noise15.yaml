@@ -1,0 +1,45 @@
+# Pose-prior accuracy sweep: noise15
+#
+# Covisibility windows only, downward views only. Isolates ONE question: how
+# accurate does a pose prior have to be before conditioning pays off?
+#
+# WHY METASHAPE POSES AND NOT THE EKF. The EKF's error grows with window span --
+# measured 2026-10-15 at 79 mm over 21 frames but 4542 mm over the 5368-frame
+# median covisibility window, which is 590% of such a window's own 0.77 m
+# baseline. It is worse than useless there. At inference we would supply
+# factor-graph-fused poses instead: imperfect, but with BOUNDED error that does
+# not grow with separation. Perturbed Metashape poses model that; the EKF does
+# not. Note MapAnything itself has no mechanism for an approximately-correct
+# pose input -- upstream corrupts geometric inputs only by removing them, making
+# depth sparse, or stripping metric scale, never by making them wrong.
+#
+# THIS RUN: 15 cm, 5 deg -- WORSE than the model's own error. Tests whether a mediocre
+# prior still helps, or whether the model must learn to discount it.
+#
+# Noise is isotropic on translation (same sigma per axis) and a random-axis
+# rotation. It is applied to ABSOLUTE poses while the model relativises to
+# view 0, so view-0-relative prior error is sqrt(2)*sigma and independent of
+# view separation -- deliberate, matching a fused pose rather than drift.
+#
+# model/task=pose_prior_only supplies the prior to ~45% of samples
+# (overall_prob 0.5 x (1 - dropout_prob 0.1)), matching upstream's own
+# aug_training rate of ~45% for camera poses. Not every window: upstream calls
+# probabilistic input training a key enabler, and it is what stops the model
+# becoming dependent on a prior that may be absent.
+#
+# Baseline is fwd2_downonly_notemp -- same windows, same views, no prior.
+
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &cfg
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    temporal_prob: 0.0
+    num_forward_views: 0
+    pose_prior: 'gt+noise'
+    pose_prior_noise_trans: 0.15
+    pose_prior_noise_rot: 5.0
+  val:
+    <<: *cfg

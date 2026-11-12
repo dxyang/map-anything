@@ -13,7 +13,7 @@ dataset_str:
     variable_num_views=${dataset.divercam_wai.val.variable_num_views},
     num_views=${dataset.divercam_wai.val.num_views},
     covisibility_thres=${dataset.divercam_wai.val.covisibility_thres},
-    pose_prior='${dataset.divercam_wai.val.pose_prior}',
+    pose_prior='${dataset.divercam_wai.val.pose_prior}', pose_prior_noise_trans=${dataset.divercam_wai.val.pose_prior_noise_trans}, pose_prior_noise_rot=${dataset.divercam_wai.val.pose_prior_noise_rot},
     num_forward_views=${dataset.divercam_wai.val.num_forward_views},
     forward_sampling='${dataset.divercam_wai.val.forward_sampling}',
     forward_offset=${dataset.divercam_wai.val.forward_offset},
@@ -42,6 +42,14 @@ covisibility_thres: 0.25
 # what to feed the model's pose conditioning: none | ekf | gt | gt+noise.
 # 'gt' is LEAKAGE -- the pose head is supervised on those same poses.
 pose_prior: 'none'
+# Gaussian perturbation applied to a 'gt+noise' prior, isotropic on translation
+# (the same sigma on each axis) and a random-axis rotation of Gaussian angle.
+# Applied to ABSOLUTE poses, and the model relativises to view 0, so the error
+# on a view-0-relative prior is sqrt(2)*sigma and does NOT grow with how far
+# apart the views are. That models a factor-graph-fused pose, not the EKF, whose
+# error grows as roughly span^0.73 and reaches 4.5 m on covisibility windows.
+pose_prior_noise_trans: 0.0
+pose_prior_noise_rot: 0.0
 
 # Forward-camera views, budgeted INSIDE num_views. 0 keeps the scene downward-only,
 # so an unmodified divercam_wai tree behaves exactly as before.
