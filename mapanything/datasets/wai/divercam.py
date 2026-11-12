@@ -206,6 +206,27 @@ class DiverCamWAI(BaseDataset):
         # covered and so cannot justify. Requiring support puts a floor under
         # individual overlap; the score then ranks what is left.
         forward_min_support=1,
+        # Metres. A forward candidate is eligible only if it lies within this
+        # distance of the downward frame it overlaps MOST (its best-overlap
+        # partner). 0 disables, reproducing the original behaviour.
+        #
+        # Why distance and not more overlap: the covisibility cell measures
+        # shared GROUND, and an oblique forward camera images seafloor several
+        # metres away, so overlap puts no bound on camera separation at all.
+        # Measured -- requiring 2, 3, 4 or 5 of the 6 downward frames to overlap
+        # left the selected forward views at 2.2-2.5 m from the nearest downward
+        # camera, flat. Distance has to be constrained directly.
+        #
+        # Why the BEST-OVERLAP partner rather than the nearest or view 0: binning
+        # forward camera error by all three, best-overlap separated the bins most
+        # cleanly (473 mm at 2.5-3.5 m against 653 by view 0 and 794 by nearest),
+        # i.e. the frame actually providing the constraint is what matters.
+        #
+        # Error roughly doubles per metre: 93 mm at 0.5-1 m, 148 at 1-1.5, 257 at
+        # 1.5-2.5, 473 at 2.5-3.5, 1334 beyond 3.5. The downward cameras in the
+        # same windows sit at 128 mm, so inside ~1.5 m the forward camera is as
+        # good as a downward one.
+        forward_max_range=0.0,
         covis_version="v0",
         **kwargs,
     ):
@@ -330,6 +351,8 @@ class DiverCamWAI(BaseDataset):
         self.forward_score = forward_score
         assert forward_min_support >= 1, forward_min_support
         self.forward_min_support = forward_min_support
+        assert forward_max_range >= 0.0, forward_max_range
+        self.forward_max_range = forward_max_range
         self.covis_version = covis_version
         self.forward_min_coverage = forward_min_coverage
         self._ekf_cache = {}
@@ -365,6 +388,7 @@ class DiverCamWAI(BaseDataset):
         self.scene_segments, self.scene_dive_root = {}, {}
         # forward-camera bookkeeping, all empty for a down-only scene
         self.scene_allowed_fwd, self.scene_fwd_of = {}, {}
+        self.scene_cam_pos = {}
         for member in spec[self.part]:
             label = member["survey"]
             scene_root = self.ROOT / label
@@ -452,6 +476,11 @@ class DiverCamWAI(BaseDataset):
             self.scene_allowed_fwd[label] = allowed_fwd
             self.scene_fwd_of[label] = fwd_of
             self.scene_segments[label] = segments
+            # Camera centres, for forward_max_range. Taken from scene_meta rather
+            # than loaded per window: the selection runs before any image read.
+            self.scene_cam_pos[label] = np.array(
+                [np.asarray(f["transform_matrix"], dtype=np.float64)[:3, 3]
+                 for f in meta["frames"]])
             # metric supervision needs the dive scaled AND the split to trust it
             self.scene_metric[label] = bool(
                 dives[label]["metric"] and member.get("metric_eval", True))
@@ -708,6 +737,12 @@ class DiverCamWAI(BaseDataset):
             return []
         rows = np.stack([np.asarray(covis_raw[int(d), :]) for d in down])
         collapse = rows.max(0) if self.forward_score == "max" else rows.mean(0)
+        if self.forward_max_range > 0:
+            # Distance from each candidate to the downward frame it overlaps most.
+            pos = self.scene_cam_pos[scene_name]
+            best = down[np.argmax(rows, axis=0)]
+            far = np.linalg.norm(pos - pos[best], axis=1) > self.forward_max_range
+            eligible = eligible & ~far
         if self.forward_min_support > 1:
             # Count how many downward frames individually clear the threshold,
             # and drop frames supported by fewer than the required number.

@@ -1,0 +1,49 @@
+# Forward-view experiment: fwdtrans_range3m
+#
+# Identical to fwdtrans_support1 except that a forward candidate must lie within
+# 3.0 m of the downward frame it overlaps MOST. Run as a set with 2 m, 3 m and
+# 4 m, against fwdtrans_support1 as the unconstrained baseline, to give a
+# dose-response curve rather than one arbitrary threshold.
+#
+# WHY DISTANCE AND NOT MORE OVERLAP. The covisibility cell measures shared
+# GROUND, and an oblique forward camera images seafloor metres away, so overlap
+# puts no bound on camera separation. Measured: requiring 2, 3, 4 or 5 of the 6
+# downward frames to overlap left the selected forward views 2.2-2.5 m from the
+# nearest downward camera, flat. Distance has to be constrained directly.
+#
+# WHY THE BEST-OVERLAP PARTNER. Binning forward camera error by distance to
+# view 0, to the nearest downward frame, and to the best-overlapping frame, the
+# last separated the bins most cleanly (473 mm at 2.5-3.5 m against 653 by
+# view 0 and 794 by nearest) -- the frame actually providing the constraint is
+# what matters.
+#
+# WHAT THIS IS FOR. Error roughly doubles per metre of that separation: 93 mm at
+# 0.5-1 m, 148 at 1-1.5, 257 at 1.5-2.5, 473 at 2.5-3.5, 1334 beyond 3.5, while
+# the downward cameras in the same windows sit at 128 mm. So inside ~1.5 m the
+# forward camera is as good as a downward one, and roughly half of currently
+# selected forward views are beyond 2 m. The question is whether removing the
+# unlearnable far samples improves the near regime that loop closure needs.
+#
+# Forward pose TRANSLATION is supervised (loss=overall_loss_fwd_trans); no
+# forward pseudo-depth, which adds nothing once position is supervised; no
+# temporal windows, measured worth nothing; support floor 1, which measured flat.
+
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &cfg
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    forward_sampling: 'covis'
+    forward_covis_thres: 0.45
+    num_forward_views: 6
+    sample_forward_count: true
+    max_forward_fraction: 0.75
+    temporal_prob: 0.0
+    forward_min_support: 1
+    forward_max_range: 3.0
+    forward_depth_supervision: false
+    forward_depth_max_range: 0.0
+  val:
+    <<: *cfg

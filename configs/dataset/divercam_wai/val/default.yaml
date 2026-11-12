@@ -17,7 +17,7 @@ dataset_str:
     num_forward_views=${dataset.divercam_wai.val.num_forward_views},
     forward_sampling='${dataset.divercam_wai.val.forward_sampling}',
     forward_offset=${dataset.divercam_wai.val.forward_offset},
-    forward_min_coverage=${dataset.divercam_wai.val.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.val.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.val.max_forward_fraction}, sample_forward_count=${dataset.divercam_wai.val.sample_forward_count}, forward_depth_supervision=${dataset.divercam_wai.val.forward_depth_supervision}, forward_depth_max_range=${dataset.divercam_wai.val.forward_depth_max_range}, forward_score='${dataset.divercam_wai.val.forward_score}', forward_min_support=${dataset.divercam_wai.val.forward_min_support}, covis_version='${dataset.divercam_wai.val.covis_version}')"
+    forward_min_coverage=${dataset.divercam_wai.val.forward_min_coverage}, forward_covis_thres=${dataset.divercam_wai.val.forward_covis_thres}, max_forward_fraction=${dataset.divercam_wai.val.max_forward_fraction}, sample_forward_count=${dataset.divercam_wai.val.sample_forward_count}, forward_depth_supervision=${dataset.divercam_wai.val.forward_depth_supervision}, forward_depth_max_range=${dataset.divercam_wai.val.forward_depth_max_range}, forward_score='${dataset.divercam_wai.val.forward_score}', forward_min_support=${dataset.divercam_wai.val.forward_min_support}, forward_max_range=${dataset.divercam_wai.val.forward_max_range}, covis_version='${dataset.divercam_wai.val.covis_version}')"
 # "<split name>:<part>" -- a yaml in loggerhead/configs/splits, and which part of it
 split: 'holdout_boobyrock:val'
 dataset_resolution: ${dataset.resolution_val_divercam}
@@ -81,3 +81,8 @@ forward_score: 'max'
 # mean scoring alone admits broadly-but-weakly overlapped frames, which the
 # error measurement never covered.
 forward_min_support: 1
+# Metres. A forward candidate must lie within this distance of the downward
+# frame it overlaps MOST. 0 disables. Overlap does not bound camera separation
+# for an oblique camera, so distance has to be constrained directly; forward
+# camera error roughly doubles per metre of that separation.
+forward_max_range: 0.0
