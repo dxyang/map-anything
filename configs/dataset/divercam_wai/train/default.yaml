@@ -39,10 +39,10 @@ overfit_num_sets: null
 variable_num_views: ${dataset.train.variable_num_views}
 num_views: ${dataset.num_views}
 covisibility_thres: 0.25
-# what to feed the model's pose conditioning: none | ekf | gt | gt+noise.
+# what to feed the model's pose conditioning: none | ekf | gt | gt_noise.
 # 'gt' is LEAKAGE -- the pose head is supervised on those same poses.
 pose_prior: 'none'
-# Gaussian perturbation applied to a 'gt+noise' prior, isotropic on translation
+# Gaussian perturbation applied to a 'gt_noise' prior, isotropic on translation
 # (the same sigma on each axis) and a random-axis rotation of Gaussian angle.
 # Applied to ABSOLUTE poses, and the model relativises to view 0, so the error
 # on a view-0-relative prior is sqrt(2)*sigma and does NOT grow with how far

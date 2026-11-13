@@ -59,7 +59,7 @@ divercam_wai:
     forward_depth_supervision: false
     forward_depth_max_range: 0.0
     forward_max_range: 0.0
-    pose_prior: 'gt+noise'
+    pose_prior: 'gt_noise'
     pose_prior_noise_trans: 0.02
     pose_prior_noise_rot: 0.5
   val:

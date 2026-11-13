@@ -254,7 +254,7 @@ class DiverCamWAI(BaseDataset):
                 "gt"        Metashape poses. LEAKAGE -- the pose head is
                             supervised on these, so this is only an upper bound
                             and a plumbing check, never a reportable result.
-                "gt+noise"  Metashape poses perturbed by the two noise args, to
+                "gt_noise"  Metashape poses perturbed by the two noise args, to
                             measure how much prior accuracy actually buys before
                             depending on the EKF's real error characteristics.
                 BaseDataset fills camera_pose_quats/trans from the ground-truth
@@ -326,7 +326,7 @@ class DiverCamWAI(BaseDataset):
         # (transforms, pts3d, masks) identical between the two.
         self.forced_view_indices = None
         self.overfit_num_sets = overfit_num_sets
-        assert pose_prior in ("none", "ekf", "gt", "gt+noise"), pose_prior
+        assert pose_prior in ("none", "ekf", "gt", "gt_noise"), pose_prior
         self.pose_prior = pose_prior
         self.pose_prior_noise_trans = pose_prior_noise_trans
         self.pose_prior_noise_rot = pose_prior_noise_rot
@@ -533,7 +533,7 @@ class DiverCamWAI(BaseDataset):
                     T = T @ np.linalg.inv(T_FwdCam_DwnCam)
             else:
                 T = np.asarray(v["camera_pose"], dtype=np.float32)
-                if self.pose_prior == "gt+noise":
+                if self.pose_prior == "gt_noise":
                     T = self._perturb(T)
             priors.append(T)
 
