@@ -1,0 +1,69 @@
+# Pose-prior accuracy sweep WITH FORWARD VIEWS: noise15_fwd
+#
+# Same prior-accuracy question as divercam_poseprior_noise15, but the covisibility
+# window now carries 0-2 forward views alongside the downward ones. Paired with
+# the downward-only run at the same noise level, so the comparison isolates what
+# the forward camera adds once a usable pose prior is present.
+#
+# FORWARD SETTINGS follow what earlier runs established:
+#   - forward pseudo-depth supervision OFF. Measured across three window shapes
+#     and two batch sizes: once forward pose translation is supervised directly,
+#     adding pseudo-depth changes forward camera accuracy by 1-3 mm with mixed
+#     sign, while costing 1-2 mm of point accuracy. It does not earn its place.
+#   - forward pose TRANSLATION supervised, via loss=overall_loss_fwd_trans. This
+#     is the one that matters. The pose-translation loss is gated on a view
+#     having valid GT depth, so without it a forward view's position is never
+#     trained -- only its rotation. Fixing that took forward camera centre error
+#     from 358 mm to 299 mm in the 3-downward-plus-1-forward configuration.
+#   - forward views drawn from the whole survey (forward_sampling 'covis'), not
+#     restricted to the temporal neighbourhood, so temporally distant revisits
+#     are included -- the loop-closure case.
+#   - NO forward_max_range here. The range-constrained runs have now been run,
+#     and 3 m is now known to be the best of them; applying it here would
+#     confound that gain with the prior-accuracy question this config exists to
+#     answer, and would break the match to the other _fwd runs.
+#
+# 0-6 forward views, redrawn per window (cap = min(6, int(8 x 0.75)) = 6).
+# Deliberately IDENTICAL to divercam_fwdtrans_support1, which is already trained
+# with no prior at all. That makes this config exactly "fwdtrans_support1 plus a
+# prior" -- a one-variable comparison against a model we already have. A
+# narrower 0-2 range would have been closer to the deployment shape but would
+# have left the forward runs with no matched no-prior baseline, so a difference
+# could not be attributed to the prior rather than the composition.
+#
+# Sampled rather than fixed also matters on its own: batch 1 measured a model
+# pinned at one forward count degrading when given a different count at
+# inference, and sampled 0-6 beat sampled 0-2, sampled 0-4 and fixed 2 in both
+# window types.
+#
+# Noise is isotropic on translation and a random-axis rotation, applied to
+# ABSOLUTE poses. Forward frames get a prior too: their camera_pose is the
+# downward Metashape pose composed with the Kalibr rig extrinsic, so the prior
+# is Metashape-derived for both cameras.
+#
+# THIS RUN: 0.15 m / 5.0 deg -- WORSE than the images alone, so the prior is a
+# liability unless the model learns to discount it. This is the top of the sweep
+# and the case that tests whether prior-conditioning degrades gracefully.
+
+defaults:
+  - divercam_mix_cond_8v
+
+divercam_wai:
+  train: &cfg
+    ROOT: ${root_data_dir}/divercam_wai_fwd
+    covis_version: 'v2'
+    temporal_prob: 0.0
+    forward_sampling: 'covis'
+    forward_covis_thres: 0.45
+    num_forward_views: 6
+    sample_forward_count: true
+    max_forward_fraction: 0.75
+    forward_min_support: 1
+    forward_depth_supervision: false
+    forward_depth_max_range: 0.0
+    forward_max_range: 0.0
+    pose_prior: 'gt_noise'
+    pose_prior_noise_trans: 0.15
+    pose_prior_noise_rot: 5.0
+  val:
+    <<: *cfg
